@@ -1,0 +1,282 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: lscached-serve
+  namespace: {{ .Release.Namespace }}
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lscached-serve
+  serviceName: lscached-serve
+  template:
+    metadata:
+      labels:
+        app: lscached-serve
+    spec:
+      containers:
+      - args:
+        - /lscached
+        - serve
+        - --addr=[::]:4522
+        - --internal-addr=[::]:4523
+        - --svmc-local-addr=[::]:0
+        - --s3-force-path-style
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: RUST_LOG
+          value: info
+        - name: AWS_REGION
+          value: {{ .Values.region }}
+        - name: TMPDIR
+          value: /tmp
+        - name: LSC_JWT_SECRET
+          value: 2e4bb139135b51b39526e5a60d447220
+        - name: LSC_CACHE_DIRECTORY
+          value: /cache
+        - name: LSC_NUM_BDSRV
+          value: "2"
+        - name: LSC_NUM_WRSRV
+          value: "1"
+        - name: LSC_SVMC_SECRET
+          value: f9a803bd7f401e7dcd3ade5b3e2e7e6c0edfca998db1709348963aee74fe88c2
+        - name: LSC_SVMC_SERVER_PUBLIC_KEY
+          value: d948beb3ecdbc70553604f5d6f7a80f985f19b1e4a156ce87e500944aae47474
+        - name: LSC_SVMC_ENDPOINT
+          value: svmcd.{{ .Release.Namespace }}.svc.cluster.local:7293
+        - name: LSC_SVMC_GROUP
+          value: lscached
+        {{- if .Values.blob.azure }}
+        - name: LSC_S3_ENDPOINT
+          value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
+        - name: LSC_S3_BUCKET
+          value: {{ .Values.blob.azure.cache_storage_bucket }}
+        - name: AWS_EC2_METADATA_DISABLED
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          value: AKIAEXAMPLE
+        - name: AWS_SECRET_ACCESS_KEY
+          value: notarealsecret
+        {{- else if .Values.blob.s3 }}
+        - name: LSC_S3_BUCKET
+          value: {{ .Values.blob.s3.cache_storage_bucket }}
+        - name: AWS_ACCESS_KEY_ID
+          value: {{ .Values.blob.s3.access_key }}
+        - name: AWS_SECRET_ACCESS_KEY
+          value: {{ .Values.blob.s3.secret_key }}
+        {{- end }}
+        - name: LSC_S3_PREFIX
+          value: default/
+        image: {{ .Values.lscached.image }}
+        imagePullPolicy: IfNotPresent
+        name: lscached-serve
+        ports:
+        - containerPort: 4522
+          name: external
+          protocol: TCP
+        - containerPort: 4523
+          name: internal
+          protocol: TCP
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /cache
+          name: cache
+          subPathExpr: $(POD_NAME)
+      priorityClassName: deno-system-high-priority
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - hostPath:
+          path: /mnt/lscache
+          type: DirectoryOrCreate
+        name: cache
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lscached-dwb
+  namespace: {{ .Release.Namespace }}
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      name: lscached-dwb
+    spec:
+      activeDeadlineSeconds: 299
+      template:
+        metadata:
+          name: lscached-dwb
+        spec:
+          containers:
+          - args:
+            - /lscached
+            - dispatch-write-buffers
+            - --s3-force-path-style
+            env:
+            - name: RUST_LOG
+              value: info
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            {{- if .Values.blob.azure }}
+            - name: LSC_S3_ENDPOINT
+              value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
+            - name: LSC_S3_BUCKET
+              value: {{ .Values.blob.azure.cache_storage_bucket }}
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              value: AKIAEXAMPLE
+            - name: AWS_SECRET_ACCESS_KEY
+              value: notarealsecret
+            {{- else if .Values.blob.s3 }}
+            - name: LSC_S3_BUCKET
+              value: {{ .Values.blob.s3.cache_storage_bucket }}
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.blob.s3.access_key }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.blob.s3.secret_key }}
+            {{- end }}
+            - name: LSC_S3_PREFIX
+              value: default/
+            image: {{ .Values.lscached.image }}
+            imagePullPolicy: IfNotPresent
+            name: lscached-dwb
+          restartPolicy: Never
+  schedule: '*/5 * * * *'
+  startingDeadlineSeconds: 30
+  successfulJobsHistoryLimit: 3
+  suspend: false
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lscached-gc
+  namespace: {{ .Release.Namespace }}
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      name: lscached-gc
+    spec:
+      activeDeadlineSeconds: 299
+      template:
+        metadata:
+          name: lscached-gc
+        spec:
+          containers:
+          - args:
+            - /lscached
+            - gc
+            - --s3-force-path-style
+            env:
+            - name: RUST_LOG
+              value: info
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            {{- if .Values.blob.azure }}
+            - name: LSC_S3_ENDPOINT
+              value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
+            - name: LSC_S3_BUCKET
+              value: {{ .Values.blob.azure.cache_storage_bucket }}
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              value: AKIAEXAMPLE
+            - name: AWS_SECRET_ACCESS_KEY
+              value: notarealsecret
+            {{- else if .Values.blob.s3 }}
+            - name: LSC_S3_BUCKET
+              value: {{ .Values.blob.s3.cache_storage_bucket }}
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.blob.s3.access_key }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.blob.s3.secret_key }}
+            {{- end }}
+            - name: LSC_S3_PREFIX
+              value: default/
+            image: {{ .Values.lscached.image }}
+            imagePullPolicy: IfNotPresent
+            name: lscached-gc
+          restartPolicy: Never
+  schedule: '*/5 * * * *'
+  startingDeadlineSeconds: 30
+  successfulJobsHistoryLimit: 3
+  suspend: false
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lscached-merge
+  namespace: {{ .Release.Namespace }}
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      name: lscached-merge
+    spec:
+      activeDeadlineSeconds: 299
+      template:
+        metadata:
+          name: lscached-merge
+        spec:
+          containers:
+          - args:
+            - /lscached
+            - merge
+            - --s3-force-path-style
+            env:
+            - name: RUST_LOG
+              value: info
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            {{- if .Values.blob.azure }}
+            - name: LSC_S3_ENDPOINT
+              value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
+            - name: LSC_S3_BUCKET
+              value: {{ .Values.blob.azure.cache_storage_bucket }}
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              value: AKIAEXAMPLE
+            - name: AWS_SECRET_ACCESS_KEY
+              value: notarealsecret
+            {{- else if .Values.blob.s3 }}
+            - name: LSC_S3_BUCKET
+              value: {{ .Values.blob.s3.cache_storage_bucket }}
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.blob.s3.access_key }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.blob.s3.secret_key }}
+            {{- end }}
+            - name: LSC_S3_PREFIX
+              value: default/
+            image: {{ .Values.lscached.image }}
+            imagePullPolicy: IfNotPresent
+            name: lscached-merge
+          restartPolicy: Never
+  schedule: '*/5 * * * *'
+  startingDeadlineSeconds: 30
+  successfulJobsHistoryLimit: 3
+  suspend: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  name: lscached-serve
+  namespace: default
+spec:
+  ports:
+    - port: 4522
+      protocol: TCP
+      targetPort: 4522
+  selector:
+    app: lscached-serve
+  type: ClusterIP

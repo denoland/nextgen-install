@@ -1,0 +1,11 @@
+.DS_Store
+/.vscode/
+
+# rust
+target/
+
+# terraform
+.terraform/
+*.tfplan
+*.tfstate*
+*.secret.tfvars

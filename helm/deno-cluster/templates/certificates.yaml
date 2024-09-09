@@ -1,0 +1,41 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: {{ .Values.certificate_email }}
+    privateKeySecretRef:
+      name: letsencrypt-production
+    solvers:
+      - dns01:
+          azureDNS:
+            resourceGroupName: {{ quote .Values.azure.resource_group_name }}
+            subscriptionID: {{ quote .Values.azure.subscription_id }}
+            hostedZoneName: {{ quote .Values.azure.dns_zone }}
+            environment: AzurePublicCloud
+            managedIdentity:
+              clientID: {{ quote .Values.azure.user_assigned_identity_client_id }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: public-tls-cert
+  annotations:
+    cert-manager.io/issue-temporary-certificate: "true"
+spec:
+  secretName: public-tls-cert
+  privateKey:
+    rotationPolicy: Always
+  commonName: {{ .Values.hostname }}
+  dnsNames:
+    - {{ quote .Values.hostname }}
+    - "*.{{ .Values.hostname }}"
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer

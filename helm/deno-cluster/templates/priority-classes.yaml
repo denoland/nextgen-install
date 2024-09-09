@@ -1,0 +1,17 @@
+apiVersion: scheduling.k8s.io/v1
+description: ""
+globalDefault: false
+kind: PriorityClass
+metadata:
+  name: deno-system-critial
+preemptionPolicy: PreemptLowerPriority
+value: 1000000
+---
+apiVersion: scheduling.k8s.io/v1
+description: This priority class should be used for XYZ service pods only.
+globalDefault: false
+kind: PriorityClass
+metadata:
+  name: deno-system-high-priority
+preemptionPolicy: PreemptLowerPriority
+value: 500000

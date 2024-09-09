@@ -1,0 +1,63 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: main
+  namespace: {{ .Release.Namespace }}
+spec:
+  args:
+    feature-gates: -component.UseLocalHostAsDefaultHost,-confmap.strictlyTypedInput
+  autoscaler:
+    maxReplicas: 10
+    minReplicas: 1
+    targetMemoryUtilization: 70
+  config:
+    exporters:
+      nop: {}
+    extensions:
+      health_check: {}
+      zpages: {}
+    processors:
+      batch: {}
+      resource:
+        attributes:
+        - action: upsert
+          key: cloud.provider
+          value: azure
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    service:
+      extensions: [health_check, zpages]
+      pipelines:
+        logs:
+          exporters: [nop]
+          processors: [batch, resource]
+          receivers: [otlp]
+        traces:
+          exporters: [nop]
+          processors: [batch, resource]
+          receivers: [otlp]
+  image: otel/opentelemetry-collector-contrib:0.105.0
+  mode: deployment
+  ports:
+  - name: otlpgrpc
+    port: 4317
+  - name: otlphttp
+    port: 4318
+  - name: metrics
+    port: 8888
+  - name: healthcheck
+    port: 13133
+  - name: zpages
+    port: 55679
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi

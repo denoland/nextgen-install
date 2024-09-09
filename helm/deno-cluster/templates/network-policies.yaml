@@ -1,0 +1,202 @@
+---
+# Deny all egress traffic by default.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: isolate-worker-egress-default-deny
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress
+
+---
+# Allow all traffic to the internet, except TCP port 25 (SMTP).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: isolate-worker
+  name: isolate-worker-egress-allow-internet
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: 1
+          endPort: 24
+          protocol: TCP
+        - port: 26
+          endPort: 65535
+          protocol: TCP
+        - port: 1
+          endPort: 65535
+          protocol: UDP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 0.0.0.0/8
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.0.0.0/24
+              - 192.0.2.0/24
+              - 192.88.99.0/24
+              - 192.168.0.0/16
+              - 198.18.0.0/15
+              - 198.51.100.0/24
+              - 203.0.113.0/24
+              - 224.0.0.0/4
+              - 255.255.255.255/32
+        - ipBlock:
+            cidr: ::/0
+            except:
+              - ::/128
+              - ::1/128
+              - ::ffff:0:0:0/96
+              - 64:ff9b::/96
+              - 100::/64
+              - 2001::/32
+              - 2001:20::/28
+              - 2001:db8::/32
+              - 2002::/16
+              - fc00::/7
+              - fe80::/10
+              - ff00::/8
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress
+
+# Allow traffic to origin services.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: isolate-worker
+  name: isolate-worker-egress-allow-origin
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: 4002
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              app: fake-origin
+        - podSelector:
+            matchLabels:
+              app: netlify-origin-service
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress
+
+# Allow traffic to the controller service.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: controller
+  name: isolate-worker-egress-allow-controller
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: 4000
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              app: controller
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress
+
+# Allow traffic to the proxy service.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: isolate-worker
+  name: isolate-worker-egress-allow-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: 4004
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              app: proxy
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress
+
+# Allow traffic to the lscached service.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: isolate-worker
+  name: isolate-worker-egress-allow-lscached
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: 4522
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              app: lscached-serve
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress
+
+---
+# TODO(pisicsaureus): This is a temporary workaround for the fact that
+# isolate-worker needs access to a DNS server that can resolve the origin
+# service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: isolate-worker
+  name: isolate-worker-egress-allow-kube-dns
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: dns
+          protocol: UDP
+        - port: dns-tcp
+          protocol: TCP
+      to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress

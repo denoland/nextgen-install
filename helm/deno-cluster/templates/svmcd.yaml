@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: svmcd
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: svmcd
+  serviceName: "svmcd"
+  replicas: 1
+  minReadySeconds: 10
+  template:
+    metadata:
+      labels:
+        app: svmcd
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - image: {{ .Values.lscached.image }}
+        imagePullPolicy: IfNotPresent
+        name: svmcd
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        ports:
+        - containerPort: 7293
+          name: external
+          protocol: UDP
+        args:
+        - /svmcd
+        - --addr=[::]:7293
+        env:
+        - name: RUST_LOG
+          value: info
+        - name: SVMCD_STATIC_SECRET
+          value: "248687f0b098d4eac21a385edaf754e23790b972d168013cb35762a2120898c9"
+        - name: PEER_lscached
+          value: "628e6c14cfc05472ecc979c8204b97355ac17216a7d75e9dfd4cb058142fbc27 lscached"
+        - name: PEER_controller
+          value: "ee2a1949cbd3d7e4ebdcb1807fdd72cb2bd8655278cb3525263721802fcf1b69 proxyctl"
+        - name: PEER_proxy
+          value: "025c04b6ae527a071444b9c4d7485ea5b25af4502fcac55174ed609be89afd42 proxyctl"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  name: svmcd
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - port: 7293
+      protocol: UDP
+      targetPort: 7293
+  selector:
+    app: svmcd
+  type: ClusterIP

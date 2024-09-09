@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: proxy
+  name: proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: proxy
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: karpenter.sh/provisioner-name
+                    operator: DoesNotExist
+              - matchExpressions:
+                  - key: eks.amazonaws.com/nodegroup
+                    operator: In
+                    values:
+                      - static
+      priorityClassName: deno-system-high-priority
+      containers:
+        - image: {{ .Values.proxy.image }}
+          imagePullPolicy: IfNotPresent
+          name: proxy
+          ports:
+            - containerPort: 8080
+              name: runner
+              protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          env:
+            - name: MULTIPLEXER_TLS_PRIVATE_KEY
+              value: |
+                -----BEGIN PRIVATE KEY-----
+                MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgmzTj88JHqS3hr66X
+                0qb4yhBVawKAsan6Mvblrp0CZa2hRANCAATaMAafbeLd0Py52czW90bGnYWe4uFV
+                sj5QhWZYX4RAGJlDAUoEj9V/KDBLQLN4GiAqB+KdtwO21YMq9/dQzKED
+                -----END PRIVATE KEY-----
+            - name: MULTIPLEXER_TLS_CERTIFICATE
+              value: |
+                -----BEGIN CERTIFICATE-----
+                MIICGTCCAb+gAwIBAgIQfUCpy5HweU6zg8RUA8DZvjAKBggqhkjOPQQDAjBrMR4w
+                HAYDVQQKExVta2NlcnQgZGV2ZWxvcG1lbnQgQ0ExIDAeBgNVBAsMF3poeUBMaXQt
+                RCAoSGV5YW5nIFpob3UpMScwJQYDVQQDDB5ta2NlcnQgemh5QExpdC1EIChIZXlh
+                bmcgWmhvdSkwHhcNMjQwNzEyMDY0MzM1WhcNMjYxMDEyMDY0MzM1WjBLMScwJQYD
+                VQQKEx5ta2NlcnQgZGV2ZWxvcG1lbnQgY2VydGlmaWNhdGUxIDAeBgNVBAsMF3po
+                eUBMaXQtRCAoSGV5YW5nIFpob3UpMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE
+                2jAGn23i3dD8udnM1vdGxp2FnuLhVbI+UIVmWF+EQBiZQwFKBI/VfygwS0CzeBog
+                KgfinbcDttWDKvf3UMyhA6NlMGMwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoG
+                CCsGAQUFBwMBMB8GA1UdIwQYMBaAFGwBCa6iObMxuftFajoE7D9w4JIpMBsGA1Ud
+                EQQUMBKCEHRlc3RpbmcuZGVuby5jb20wCgYIKoZIzj0EAwIDSAAwRQIhANl5Njcz
+                hqj3wOK5N+3ph7SuG7lHyqZWOK9VvcvPzqiwAiA4Z/tXp9WfIdGHXDfQ3++pBqfs
+                wVDedtA13VIXgY+0xQ==
+                -----END CERTIFICATE-----
+            - name: IDENTITY_TOKEN_SIGNING_KEY
+              value: "866e5adb5738ac94592e5ca1174b52b5f381b3135f4bff8d6202a9649ac8fa37"
+            - name: PROXY_CONTROLLER_SHARED_SECRET
+              value: "206211bb5bbe1f4e146f7c31cdf848ace70aabc5af30c206f307509528c2de89"
+            - name: SVMC_SECRET
+              value: 43310847d266518ad195efb034178c3929f6355bdeae791f61537beba6f4c0bc
+            - name: SVMC_SERVER_PUBLIC_KEY
+              value: d948beb3ecdbc70553604f5d6f7a80f985f19b1e4a156ce87e500944aae47474
+          volumeMounts:
+            - name: subhoster-config
+              mountPath: /app/subhoster-config
+              readOnly: true
+            - name: public-tls-cert
+              mountPath: /app/public-tls-cert
+              readOnly: true
+      volumes:
+        - name: subhoster-config
+          secret:
+            secretName: subhoster-config
+        - name: public-tls-cert
+          secret:
+            secretName: public-tls-cert
+      nodeSelector:
+        kubernetes.io/os: linux
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/azure-dns-label-name: deno-cluster-proxy
+  finalizers: []
+  name: nlb-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: {{ .Values.proxy.service_port | default 443 }}
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: proxy
+  type: LoadBalancer

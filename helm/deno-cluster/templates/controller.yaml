@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: controller
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations: {}
+  name: controller
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: controller-binding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: controller
+subjects:
+  - kind: ServiceAccount
+    name: controller
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: deno-metrics
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - list
+      - get
+      - watch
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/metrics
+    verbs:
+      - get
+  - nonResourceURLs:
+      - /metrics
+      - /metrics/cadvisor
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations: {}
+  name: deno-metrics-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: deno-metrics
+subjects:
+  - kind: ServiceAccount
+    name: controller
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+data:
+  foo: bar
+kind: ConfigMap
+metadata:
+  name: pods-config
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: subhoster-config
+  namespace: {{ .Release.Namespace }}
+stringData:
+  subhosters.json: |
+    []
+type: Opaque
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: controller
+  template:
+    metadata:
+      labels:
+        app: controller
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: karpenter.sh/provisioner-name
+                operator: DoesNotExist
+            - matchExpressions:
+              - key: eks.amazonaws.com/nodegroup
+                operator: In
+                values:
+                - static
+      containers:
+      - env:
+        - name: MIN_ISOLATE_WORKERS_REPLICAS
+          value: "4"
+        - name: MAX_ISOLATE_WORKERS_REPLICAS
+          value: "10"
+        - name: ISOLATE_WORKER_CONTAINER_IMAGE
+          value: {{ .Values.controller.isolate_worker.image }}
+        - name: ISOLATE_SEALING_KEY
+          value: 08663fa5bd8e2942d695873764c0b24e405799a985b30f8fd6c7d7244312297b
+        - name: IDENTITY_TOKEN_SIGNING_KEY
+          value: 866e5adb5738ac94592e5ca1174b52b5f381b3135f4bff8d6202a9649ac8fa37
+        - name: PROXY_CONTROLLER_SHARED_SECRET
+          value: 206211bb5bbe1f4e146f7c31cdf848ace70aabc5af30c206f307509528c2de89
+        - name: CONTROLLER_POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: CONTROLLER_POD_UID
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.uid
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: LSC_JWT_SECRET
+          value: 2e4bb139135b51b39526e5a60d447220
+        - name: SVMC_SECRET
+          value: f51416470f71a6e2aa895a4b2e664159bb29a68e68dc10d3b359813f3d16a703
+        - name: SVMC_SERVER_PUBLIC_KEY
+          value: d948beb3ecdbc70553604f5d6f7a80f985f19b1e4a156ce87e500944aae47474
+        - name: SVMC_ENDPOINT
+          value: svmcd.{{ .Release.Namespace }}.svc.cluster.local:7293
+        - name: LSC_ENDPOINT
+          value: http://lscached-serve.{{ .Release.Namespace }}.svc.cluster.local:4522
+        - name: AWS_REGION
+          value: {{ .Values.region }}
+        {{- if .Values.blob.azure }}
+        - name: S3_ENDPOINT
+          value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
+        - name: AWS_EC2_METADATA_DISABLED
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          value: AKIAEXAMPLE
+        - name: AWS_SECRET_ACCESS_KEY
+          value: notarealsecretkey
+        {{- else if .Values.blob.s3 }}
+        - name: AWS_ACCESS_KEY_ID
+          value: {{ .Values.blob.s3.access_key }}
+        - name: AWS_SECRET_ACCESS_KEY
+          value: {{ .Values.blob.s3.secret_key }}
+        {{- end }}
+        # TODO(wperron) delete this
+        - name: HOSTMAP_SOURCE_default
+          value: '{"hostname":".{{ .Values.hostname }}","subhosterId":"localdev",{{- if .Values.blob.azure }}"s3Endpoint": "http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080", {{- end }}"s3Bucket":{{ quote .Values.blob.azure.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
+        image: {{ .Values.controller.image }}
+        imagePullPolicy: IfNotPresent
+        name: controller
+        ports:
+        - containerPort: 4000
+          protocol: TCP
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      priorityClassName: deno-system-critial
+      serviceAccount: controller
+      terminationGracePeriodSeconds: 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  name: controller
+  namespace: default
+spec:
+  ports:
+    - port: 4000
+      protocol: TCP
+      targetPort: 4000
+  selector:
+    app: controller
+  type: ClusterIP
