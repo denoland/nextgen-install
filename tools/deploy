@@ -57,7 +57,7 @@ if [ -z "$deployment_domain" ]; then
   usage
 fi
 
-if [ -z "$s3_bucket" ] && { [ -z "$az_account" ]; }; then
+if [ -z "$s3_bucket" ] && [ -z "$az_account" ]; then
   echo "Either --s3-bucket or --az-storage-account must be provided."
   exit 1
 fi
@@ -95,8 +95,14 @@ else
   echo "  entry point: $entry_point"
 fi
 
+# Determine if the entry point is Next.js and set args accordingly
+if [[ "$entry_point" == *"node_modules/.bin/next"* ]]; then
+  echo '{"entrypoint": "'$entry_point'", "args": ["start"]}' >"$tempdir/pkg/config.json"
+else
+  echo '{"entrypoint": "'$entry_point'", "args": []}' >"$tempdir/pkg/config.json"
+fi
+
 echo "Building package..."
-echo '{"entrypoint": "'$entry_point'"}' >"$tempdir/config.json"
 DENO_DIR="$tempdir/pkg/deno_dir" DENO_FUTURE=1 deno cache "$tempdir/pkg/src/$entry_point"
 cd ..
 tar c . >../pkg.tar
