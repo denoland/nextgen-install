@@ -200,3 +200,30 @@ spec:
       app: isolate-worker
   policyTypes:
     - Egress
+---
+# Allow traffic to the OpenTelemetry Collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: isolate-worker
+  name: isolate-worker-egress-allow-otel-otlp
+  namespace: {{ .Release.Namespace }}
+spec:
+  egress:
+    - ports:
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP
+        - port: 13133
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              "app.kubernetes.io/name": main-collector
+  podSelector:
+    matchLabels:
+      app: isolate-worker
+  policyTypes:
+    - Egress

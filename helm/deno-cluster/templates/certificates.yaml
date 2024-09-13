@@ -1,3 +1,4 @@
+{{ if eq .Values.provider "azure" }}
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -39,3 +40,4 @@ spec:
   issuerRef:
     name: letsencrypt-production
     kind: ClusterIssuer
+{{ end }}

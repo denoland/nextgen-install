@@ -1,13 +1,13 @@
 provider "azurerm" {
-  subscription_id = "68245e99-8e6b-43ff-931c-0a895801acad" # <- Fill in your Azure subscription ID here.
+  subscription_id = "522b185c-ec06-4a7d-83bb-21278d70f057" # <- Fill in your Azure subscription ID here.
   environment     = "public"
   features {}
 }
 
 locals {
   dns_zone = "deno-cluster.net" # <— The DNS zone that terraform will create in Azure.
-  dns_root = "mycluster"        # <— The leftmost label of your cluster domain name.
-  name     = "deno-cluster-01"  # <— This name will be used to create a new resource group and name various resources.
+  dns_root = "gargamel"         # <— The leftmost label of your cluster domain name.
+  name     = "gargamel"         # <— This name will be used to create a new resource group and name various resources.
   region   = "westus"           # <— The Azure region to deploy to.
 }
 

@@ -1,4 +1,4 @@
-{{ if .Values.blob.azure }}
+{{ if eq .Values.provider "azure" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -30,7 +30,7 @@ spec:
         app: s3proxy
     spec:
       containers:
-        - image: docker.io/andrewgaul/s3proxy:sha-61adb31
+        - image: {{ .Values.s3proxy.image }}
           imagePullPolicy: IfNotPresent
           name: s3proxy
           command: ["java"]

@@ -1,6 +1,10 @@
+provider: azure
 region: westus # CHANGE ME
 hostname: mycluster.example.org # CHANGE ME
-certificate_email: john.doe@example.org # CHANGE ME
+
+# The certificate email will be associated with the TLS certificate provisioned
+# through Let's Encrypt.
+certificate_email: foo@example.org # CHANGE ME
 
 azure:
   subscription_id: UUID # CHANGE ME
@@ -8,27 +12,36 @@ azure:
   dns_zone: example.org # CHANGE ME
   user_assigned_identity_client_id: UUID # CHANGE ME
 
-controller:
-  image: docker.io/denoland/cluster-controller:v0.0.1
-  isolate_worker:
-    image: docker.io/denoland/cluster-isolate-worker:v0.0.1
-
-proxy:
-  image: docker.io/denoland/cluster-proxy:v0.0.1
-
-lscached:
-  image: docker.io/denoland/cluster-lscached:v0.0.1
-
 blob:
   azure:
     storage_account: mystorageaccount # CHANGE ME
     storage_account_endpoint: https://mystorageaccount.blob.core.windows.net # CHANGE ME
     credentials: supersecret credentials # CHANGE ME
-    code_storage_bucket: deployments
     cache_storage_bucket: cache
+    code_storage_bucket: deployments
     hostmap_storage_bucket: deployments
-  # s3:
-  #   access_key: AKIAEXAMPLE
-  #   secret_key: SECRETKEYEXAMPLE
-  #   code_storage_bucket: code-storage
-  #   cache_storage_bucket: cache-storage
+
+# Uncomment the following block to send logs to an OTLP endpoint.
+# otlp:
+#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
+#   auth:
+#     authenticator: basicauth/otlp
+#     username: "103456"
+#     password: "ghc_xxx"
+
+controller:
+  image: docker.io/denoland/cluster-controller:v0.0.4
+  # min_isolate_workers_replicas: 10
+  # max_isolate_workers_replicas: 100
+  env:
+    - name: ISOLATE_WORKER_CONTAINER_IMAGE
+      value: docker.io/denoland/cluster-isolate-worker:v0.0.4
+
+proxy:
+  image: docker.io/denoland/cluster-proxy:v0.0.4
+
+lscached:
+  image: docker.io/denoland/cluster-lscached:v0.0.4
+
+s3proxy:
+  image: docker.io/denoland/cluster-s3proxy:v0.0.4

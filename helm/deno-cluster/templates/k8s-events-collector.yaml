@@ -64,7 +64,7 @@ spec:
           - name: events
             mode: watch
             group: events.k8s.io
-            namespaces: [default, {{ .Release.Namespace }}]
+            namespaces: {{ list "default" .Release.Namespace | uniq }}
 
     processors:
       batch: {}

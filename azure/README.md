@@ -127,9 +127,13 @@ in the Terraform output. They're highlighted in the example below.
 > chart.
 
 ```yaml
+provider: azure
 region: westus # CHANGE ME
 hostname: mycluster.example.org # CHANGE ME
-certificate_email: john.doe@example.org # CHANGE ME
+
+# The certificate email will be associated with the TLS certificate provisioned
+# through Let's Encrypt.
+certificate_email: foo@example.org # CHANGE ME
 
 azure:
   subscription_id: UUID # CHANGE ME
@@ -137,25 +141,37 @@ azure:
   dns_zone: example.org # CHANGE ME
   user_assigned_identity_client_id: UUID # CHANGE ME
 
-controller:
-  image: docker.io/denoland/cluster-controller:v0.0.1
-  isolate_worker:
-    image: docker.io/denoland/cluster-isolate-worker:v0.0.1
-
-proxy:
-  image: docker.io/denoland/cluster-proxy:v0.0.1
-
-lscached:
-  image: docker.io/denoland/cluster-lscached:v0.0.1
-
 blob:
   azure:
     storage_account: mystorageaccount # CHANGE ME
     storage_account_endpoint: https://mystorageaccount.blob.core.windows.net # CHANGE ME
     credentials: supersecret credentials # CHANGE ME
-    code_storage_bucket: deployments
     cache_storage_bucket: cache
+    code_storage_bucket: deployments
     hostmap_storage_bucket: deployments
+
+# Uncomment the following block to send logs to an OTLP endpoint.
+# otlp:
+#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
+#   auth:
+#     authenticator: basicauth/otlp
+#     username: "103456"
+#     password: "ghc_xxx"
+
+controller:
+  image: docker.io/denoland/cluster-controller:v0.0.4
+  env:
+    - name: ISOLATE_WORKER_CONTAINER_IMAGE
+      value: docker.io/denoland/cluster-isolate-worker:v0.0.4
+
+proxy:
+  image: docker.io/denoland/cluster-proxy:v0.0.4
+
+lscached:
+  image: docker.io/denoland/cluster-lscached:v0.0.4
+
+s3proxy:
+  image: docker.io/denoland/cluster-s3proxy:v0.0.4
 ```
 
 Then, install the `deno-cluster` Helm chart.
@@ -213,7 +229,7 @@ that were shown after running `terraform apply`, e.g.
 `mycluster.deno-cluster.net` and `mycluster1234`.
 
 ```bash
-../tools/deploy \
+../tools/ddng deploy \
   -s ../examples/hello \
   -d hello.<cluster_domain> \
   --az-storage-account <storage_account_name>

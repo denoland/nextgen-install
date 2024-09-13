@@ -13,16 +13,30 @@ spec:
   config:
     exporters:
       nop: {}
+      {{- if .Values.otlp }}
+      otlphttp:
+        endpoint: "{{ .Values.otlp.endpoint }}"
+        {{- if .Values.otlp.auth }}
+        auth:
+          authenticator: {{ .Values.otlp.auth.authenticator }}
+        {{- end }}
+      {{- end }}
     extensions:
       health_check: {}
       zpages: {}
+      {{- if and (.Values.otlp) (.Values.otlp.auth) (eq .Values.otlp.auth.authenticator "basicauth/otlp") }}
+      basicauth/otlp:
+        client_auth:
+          username: '{{ .Values.otlp.auth.username }}'
+          password: '{{ .Values.otlp.auth.password }}'
+      {{- end }}
     processors:
       batch: {}
       resource:
         attributes:
         - action: upsert
           key: cloud.provider
-          value: azure
+          value: {{ quote .Values.provider }}
     receivers:
       otlp:
         protocols:
@@ -31,14 +45,29 @@ spec:
           http:
             endpoint: 0.0.0.0:4318
     service:
-      extensions: [health_check, zpages]
+      extensions:
+        - health_check
+        - zpages
+        {{- if and (.Values.otlp) (.Values.otlp.auth) (eq .Values.otlp.auth.authenticator "basicauth/otlp") }}
+        - basicauth/otlp
+        {{- end }}
       pipelines:
         logs:
-          exporters: [nop]
+          exporters:
+            {{- if .Values.otlp }}
+            - otlphttp
+            {{- else }}
+            - nop
+            {{- end }}
           processors: [batch, resource]
           receivers: [otlp]
         traces:
-          exporters: [nop]
+          exporters:
+            {{- if .Values.otlp }}
+            - otlphttp
+            {{- else }}
+            - nop
+            {{- end }}
           processors: [batch, resource]
           receivers: [otlp]
   image: otel/opentelemetry-collector-contrib:0.105.0
@@ -59,5 +88,5 @@ spec:
       cpu: 2
       memory: 2Gi
     requests:
-      cpu: 500m
+      cpu: 300m
       memory: 512Mi

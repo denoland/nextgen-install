@@ -3,7 +3,7 @@ description: ""
 globalDefault: false
 kind: PriorityClass
 metadata:
-  name: deno-system-critial
+  name: deno-system-critical
 preemptionPolicy: PreemptLowerPriority
 value: 1000000
 ---

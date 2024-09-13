@@ -1,0 +1,332 @@
+#! /usr/bin/env -S deno run --ext=ts --allow-read --allow-write --allow-env --allow-net --allow-run --allow-sys
+
+import { parseArgs } from "jsr:@std/cli@1.0.3/parse-args";
+import { join } from "jsr:@std/path@1.0.3/join";
+import { ensureDir } from "jsr:@std/fs@1.0.3";
+import { encodeBase64 } from "jsr:@std/encoding@1.0.3/base64";
+
+interface DeployArgs {
+  domain?: string;
+  sourceDir?: string;
+  entryPoint?: string;
+  env?: Record<string, string>;
+  s3Bucket?: string;
+  azStorageAccount?: string;
+}
+
+interface UserConfig {
+  env?: Record<string, string>;
+  entrypoint?: string;
+  args?: string[];
+}
+
+async function deploy(args: DeployArgs) {
+  // Validate required parameters
+  if (!args.domain) {
+    console.error("Deployment domain is required.");
+    usage();
+    Deno.exit(1);
+  }
+
+  if (!args.s3Bucket && !args.azStorageAccount) {
+    console.error(
+      "Either --s3-bucket or --az-storage-account must be provided.",
+    );
+    usage();
+    Deno.exit(1);
+  }
+
+  const sourceDir = args.sourceDir || Deno.cwd();
+  let entryPoint = args.entryPoint;
+  const subhoster = "localdev";
+
+  // Extract root domain by stripping the first label from the deployment domain
+  const clusterDomain = args.domain.split(".").slice(1).join(".");
+
+  // Prepare temp directory
+  const tempDir = await Deno.makeTempDir({ prefix: "star-shaped-hole-deploy" });
+
+  try {
+    await ensureDir(join(tempDir, "pkg", "deno_dir"));
+    await ensureDir(join(tempDir, "pkg", "src"));
+
+    // Copy source code to tempdir
+    const copyCommand = new Deno.Command("bash", {
+      args: [
+        "-c",
+        `(cd "${sourceDir}" && tar --exclude='.git' -cf - .) | (cd "${tempDir}/pkg/src" && tar -xf -)`,
+      ],
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const { success: copySuccess } = await copyCommand
+      .output();
+    if (!copySuccess) {
+      console.error("Failed to copy source code.");
+      Deno.exit(1);
+    }
+
+    // Detect entry point if not specified
+    if (!entryPoint) {
+      const possibleEntryPoints = [
+        "main.ts",
+        "main.js",
+        "index.ts",
+        "index.js",
+        "mod.ts",
+        "mod.js",
+        "node_modules/.bin/next",
+      ];
+      for (const ep of possibleEntryPoints) {
+        if (
+          await Deno.stat(join(tempDir, "pkg", "src", ep)).catch(() => null)
+        ) {
+          entryPoint = ep;
+          break;
+        }
+      }
+    }
+
+    if (!entryPoint) {
+      console.error("Error: could not determine entry point.");
+      Deno.exit(1);
+    }
+
+    const isNextApp = entryPoint === "node_modules/.bin/next";
+
+    console.log(`  entry point: ${entryPoint}`);
+
+    console.log("Building package...");
+    const config: UserConfig = { entrypoint: entryPoint };
+    if (isNextApp) {
+      config.args = ["start"];
+    }
+    if (args.env) {
+      config.env = args.env;
+    }
+    await Deno.writeTextFile(
+      join(tempDir, "pkg", "config.json"),
+      JSON.stringify(config),
+    );
+
+    // Cache dependencies
+    const cacheCommand = new Deno.Command("deno", {
+      env: { "DENO_DIR": join(tempDir, "pkg", "deno_dir"), "DENO_FUTURE": "1" },
+      args: ["cache", join(tempDir, "pkg", "src", entryPoint)],
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const { success: cacheSuccess } = await cacheCommand
+      .output();
+    if (!cacheSuccess) {
+      console.error("Failed to cache dependencies.");
+      Deno.exit(1);
+    }
+
+    // Create tar archive
+    const tarCommand = new Deno.Command("tar", {
+      args: ["cf", join(tempDir, "pkg.tar"), "-C", join(tempDir, "pkg"), "."],
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const { success: tarSuccess } = await tarCommand
+      .output();
+    if (!tarSuccess) {
+      console.error("Failed to create tar archive.");
+      Deno.exit(1);
+    }
+
+    // Upload package
+    console.log("Uploading package...");
+    const codePath = `code/pkg-${Date.now()}-${crypto.randomUUID()}.tar`;
+    let codeUrl: string;
+    let uploadCommand: Deno.Command;
+
+    if (args.s3Bucket) {
+      codeUrl = `s3://${args.s3Bucket}/${codePath}`;
+      uploadCommand = new Deno.Command("aws", {
+        args: ["s3", "cp", join(tempDir, "pkg.tar"), codeUrl],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+    } else if (args.azStorageAccount) {
+      codeUrl = `s3://deployments/${codePath}`;
+      uploadCommand = new Deno.Command("az", {
+        args: [
+          "storage",
+          "blob",
+          "upload",
+          "-o",
+          "none",
+          "--only-show-errors",
+          "-f",
+          join(tempDir, "pkg.tar"),
+          "--account-name",
+          args.azStorageAccount,
+          "-c",
+          "deployments",
+          "-n",
+          codePath,
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+    } else {
+      throw new Error("No storage provider specified");
+    }
+    const { success: uploadSuccess } = await uploadCommand
+      .output();
+    if (!uploadSuccess) {
+      console.error("Failed to upload package.");
+      Deno.exit(1);
+    }
+
+    // Construct layered code URL
+    let layers = encodeBase64(codeUrl);
+    if (Deno.env.get("LAYERS_PREFIX")) {
+      layers = `${Deno.env.get("LAYERS_PREFIX")},${layers}`;
+    }
+    if (Deno.env.get("LAYERS_SUFFIX")) {
+      layers = `${layers},${Deno.env.get("LAYERS_SUFFIX")}`;
+    }
+    const layeredCodeUrl = `layers://${layers}`;
+
+    // Make a HTTP request to the cluster to trigger deployment
+    console.log("Optimizing deployment...");
+    const optimizeCommand = fetch(`https://${clusterDomain}`, {
+      method: "GET",
+      headers: {
+        "x-deno-deployment-id": `${subhoster}/${layeredCodeUrl}`,
+      },
+    });
+    const optimizeResponse = await optimizeCommand;
+    if (!optimizeResponse.ok) {
+      throw new Error(
+        `Failed to optimize deployment: ${optimizeResponse.status} ${optimizeResponse.statusText}`,
+      );
+    }
+
+    // Update hostmap
+    console.log("Updating hostmap...");
+    if (args.s3Bucket) {
+      const updateHostmapCommand = new Deno.Command("aws", {
+        args: ["s3", "cp", "-", `s3://${args.s3Bucket}/hostmap/${args.domain}`],
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "piped",
+      });
+      const child = updateHostmapCommand.spawn();
+      const writer = child.stdin.getWriter();
+      await writer.write(new TextEncoder().encode(layeredCodeUrl));
+      writer.close();
+      const { success: hostmapSuccess } = await child.output();
+      if (!hostmapSuccess) {
+        console.error("Failed to update hostmap.");
+        Deno.exit(1);
+      }
+    } else if (args.azStorageAccount) {
+      const updateHostmapCommand = new Deno.Command("az", {
+        args: [
+          "storage",
+          "blob",
+          "upload",
+          "-o",
+          "none",
+          "--only-show-errors",
+          "--overwrite",
+          "--data",
+          layeredCodeUrl,
+          "--account-name",
+          args.azStorageAccount,
+          "-c",
+          "deployments",
+          "-n",
+          `hostmap/${args.domain}`,
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const { success: hostmapSuccess } = await updateHostmapCommand.output();
+      if (!hostmapSuccess) {
+        console.error("Failed to update hostmap.");
+        Deno.exit(1);
+      }
+    } else {
+      throw new Error("No storage provider specified");
+    }
+
+    console.log(`Deployed to https://${args.domain}`);
+  } finally {
+    // Clean up temp directory
+    await Deno.remove(tempDir, { recursive: true });
+  }
+}
+
+function usage() {
+  console.log("Usage: cli.ts <command> [options]");
+  console.log("Commands:");
+  console.log("  deploy                         Create a new deployment");
+  console.log();
+  console.log("Options:");
+  console.log(
+    "  -d,--domain <domain>           Deployment domain (e.g., hello.mycluster.deno-cluster.net)",
+  );
+  console.log(
+    "  -s,--source-dir <dir>          Source directory (default: current directory)",
+  );
+  console.log(
+    "  -e,--entry-point <file>        Specify entry point (default: auto detect)",
+  );
+  console.log(
+    "  --env <KEY=VALUE>              Set environment variables using KEY=VALUE format, can be specified multiple times",
+  );
+  console.log(
+    "  --s3-bucket <bucket>           Specify S3 bucket (required if using AWS)",
+  );
+  console.log(
+    "  --az-storage-account <acc>     Azure storage account (required if using Azure)",
+  );
+  Deno.exit(1);
+}
+
+if (import.meta.main) {
+  const args = parseArgs(Deno.args, {
+    string: [
+      "domain",
+      "source-dir",
+      "entry-point",
+      "env",
+      "s3-bucket",
+      "az-storage-account",
+    ],
+    collect: ["env"],
+    alias: {
+      d: "domain",
+      s: "source-dir",
+      e: "entry-point",
+    },
+  });
+
+  if (args._[0] === "deploy") {
+    await deploy({
+      domain: args.domain,
+      sourceDir: args["source-dir"],
+      entryPoint: args["entry-point"],
+      env: Object.fromEntries(args.env.map((e: string) => {
+        const eqIndex = e.indexOf("=");
+        if (eqIndex === -1) {
+          console.error(`Invalid environment variable: ${e}`);
+          Deno.exit(1);
+        }
+        return [e.slice(0, eqIndex), e.slice(eqIndex + 1)];
+      })),
+      s3Bucket: args["s3-bucket"],
+      azStorageAccount: args["az-storage-account"],
+    });
+  } else if (args._[0] === "help" || args.help) {
+    usage();
+  } else {
+    console.error("Unknown command");
+    Deno.exit(1);
+  }
+}

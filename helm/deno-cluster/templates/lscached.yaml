@@ -22,7 +22,12 @@ spec:
         - --addr=[::]:4522
         - --internal-addr=[::]:4523
         - --svmc-local-addr=[::]:0
+        {{- if not (eq .Values.provider "aws") }}
         - --s3-force-path-style
+        {{- end }}
+        envFrom:
+        - secretRef:
+            name: lscached-credentials
         env:
         - name: POD_NAME
           valueFrom:
@@ -34,23 +39,17 @@ spec:
           value: {{ .Values.region }}
         - name: TMPDIR
           value: /tmp
-        - name: LSC_JWT_SECRET
-          value: 2e4bb139135b51b39526e5a60d447220
         - name: LSC_CACHE_DIRECTORY
           value: /cache
         - name: LSC_NUM_BDSRV
           value: "2"
         - name: LSC_NUM_WRSRV
           value: "1"
-        - name: LSC_SVMC_SECRET
-          value: f9a803bd7f401e7dcd3ade5b3e2e7e6c0edfca998db1709348963aee74fe88c2
-        - name: LSC_SVMC_SERVER_PUBLIC_KEY
-          value: d948beb3ecdbc70553604f5d6f7a80f985f19b1e4a156ce87e500944aae47474
         - name: LSC_SVMC_ENDPOINT
           value: svmcd.{{ .Release.Namespace }}.svc.cluster.local:7293
         - name: LSC_SVMC_GROUP
           value: lscached
-        {{- if .Values.blob.azure }}
+        {{- if eq .Values.provider "azure" }}
         - name: LSC_S3_ENDPOINT
           value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
         - name: LSC_S3_BUCKET
@@ -61,7 +60,7 @@ spec:
           value: AKIAEXAMPLE
         - name: AWS_SECRET_ACCESS_KEY
           value: notarealsecret
-        {{- else if .Values.blob.s3 }}
+        {{- else if eq .Values.provider "aws" }}
         - name: LSC_S3_BUCKET
           value: {{ .Values.blob.s3.cache_storage_bucket }}
         - name: AWS_ACCESS_KEY_ID
@@ -116,13 +115,15 @@ spec:
           - args:
             - /lscached
             - dispatch-write-buffers
+            {{- if not (eq .Values.provider "aws") }}
             - --s3-force-path-style
+            {{- end }}
             env:
             - name: RUST_LOG
               value: info
             - name: AWS_REGION
               value: {{ .Values.region }}
-            {{- if .Values.blob.azure }}
+            {{- if eq .Values.provider "azure" }}
             - name: LSC_S3_ENDPOINT
               value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
             - name: LSC_S3_BUCKET
@@ -133,7 +134,7 @@ spec:
               value: AKIAEXAMPLE
             - name: AWS_SECRET_ACCESS_KEY
               value: notarealsecret
-            {{- else if .Values.blob.s3 }}
+            {{- else if eq .Values.provider "aws" }}
             - name: LSC_S3_BUCKET
               value: {{ .Values.blob.s3.cache_storage_bucket }}
             - name: AWS_ACCESS_KEY_ID
@@ -173,13 +174,15 @@ spec:
           - args:
             - /lscached
             - gc
+            {{- if not (eq .Values.provider "aws") }}
             - --s3-force-path-style
+            {{- end }}
             env:
             - name: RUST_LOG
               value: info
             - name: AWS_REGION
               value: {{ .Values.region }}
-            {{- if .Values.blob.azure }}
+            {{- if eq .Values.provider "azure" }}
             - name: LSC_S3_ENDPOINT
               value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
             - name: LSC_S3_BUCKET
@@ -190,7 +193,7 @@ spec:
               value: AKIAEXAMPLE
             - name: AWS_SECRET_ACCESS_KEY
               value: notarealsecret
-            {{- else if .Values.blob.s3 }}
+            {{- else if eq .Values.provider "aws" }}
             - name: LSC_S3_BUCKET
               value: {{ .Values.blob.s3.cache_storage_bucket }}
             - name: AWS_ACCESS_KEY_ID
@@ -230,13 +233,15 @@ spec:
           - args:
             - /lscached
             - merge
+            {{- if not (eq .Values.provider "aws") }}
             - --s3-force-path-style
+            {{- end }}
             env:
             - name: RUST_LOG
               value: info
             - name: AWS_REGION
               value: {{ .Values.region }}
-            {{- if .Values.blob.azure }}
+            {{- if eq .Values.provider "azure" }}
             - name: LSC_S3_ENDPOINT
               value: http://s3proxy.{{ .Release.Namespace }}.svc.cluster.local:8080
             - name: LSC_S3_BUCKET
@@ -247,7 +252,7 @@ spec:
               value: AKIAEXAMPLE
             - name: AWS_SECRET_ACCESS_KEY
               value: notarealsecret
-            {{- else if .Values.blob.s3 }}
+            {{- else if eq .Values.provider "aws" }}
             - name: LSC_S3_BUCKET
               value: {{ .Values.blob.s3.cache_storage_bucket }}
             - name: AWS_ACCESS_KEY_ID
