@@ -1,7 +1,16 @@
 provider "azurerm" {
   subscription_id = "522b185c-ec06-4a7d-83bb-21278d70f057" # <- Fill in your Azure subscription ID here.
   environment     = "public"
+  storage_use_azuread = true # force MI for Storage layers
   features {}
+
+  # https://registry.terraform.io/providers/hashicorp/azurerm/4.0.1/docs?utm_content=documentLink&utm_medium=Visual+Studio+Code&utm_source=terraform-ls#resource-provider-registrations
+  resource_providers_to_register = [
+    "Microsoft.Network",
+    "Microsoft.Storage",
+    "Microsoft.Compute",
+    "Microsoft.ContainerService",
+  ]
 }
 
 locals {

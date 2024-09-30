@@ -1,30 +1,15 @@
 data "azurerm_subscription" "current" {
 }
 
-resource "null_resource" "azure_provider_registration" {
-  for_each = toset([
-    "Microsoft.Network",
-    "Microsoft.Storage",
-    "Microsoft.Compute",
-    "Microsoft.ContainerService",
-  ])
-
-  provisioner "local-exec" {
-    command = "az provider register --verbose --subscription ${data.azurerm_subscription.current.subscription_id} --namespace ${each.key}"
-  }
-}
-
 resource "azurerm_resource_group" "deno_cluster" {
   location = var.region
   name     = var.name
-
-  depends_on = [null_resource.azure_provider_registration]
 }
 
 resource "azurerm_kubernetes_cluster" "deno_cluster" {
   name                = "${azurerm_resource_group.deno_cluster.name}-k8s"
   resource_group_name = azurerm_resource_group.deno_cluster.name
-  location            = var.region
+  location            = azurerm_resource_group.deno_cluster.location
   dns_prefix          = "${azurerm_resource_group.deno_cluster.name}-k8s"
 
   oidc_issuer_enabled       = true
@@ -50,9 +35,11 @@ resource "azurerm_kubernetes_cluster" "deno_cluster" {
   }
 
   identity {
-    type = "SystemAssigned"
+    type = "UserAssigned"
+    identity_ids = [
+      data.azurerm_user_assigned_identity.deno_cluster.id
+    ]
   }
-
 }
 
 resource "random_string" "storage_account_suffix" {
@@ -71,11 +58,20 @@ resource "random_string" "storage_account_suffix" {
 resource "azurerm_storage_account" "deno_cluster" {
   name                = "${replace(azurerm_resource_group.deno_cluster.name, "/[^\\w]/", "")}${random_string.storage_account_suffix.id}"
   resource_group_name = azurerm_resource_group.deno_cluster.name
-  location            = var.region
+  location            = azurerm_resource_group.deno_cluster.location
 
+  # account_kind                    = "StorageV2" < we're using this
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   allow_nested_items_to_be_public = false
+  shared_access_key_enabled       = false
+
+  identity {
+    type = "UserAssigned"
+    identity_ids = [
+      data.azurerm_user_assigned_identity.deno_cluster.id
+    ]
+  }
 }
 
 resource "azurerm_storage_container" "deployments_storage_container" {
@@ -92,7 +88,7 @@ resource "azurerm_storage_container" "cache_storage_container" {
 
 resource "azurerm_user_assigned_identity" "deno_cluster" {
   name                = "${azurerm_resource_group.deno_cluster.name}-identity"
-  location            = var.region
+  location            = azurerm_resource_group.deno_cluster.location
   resource_group_name = azurerm_resource_group.deno_cluster.name
 }
 
@@ -106,8 +102,14 @@ resource "azurerm_federated_identity_credential" "cert_manager" {
 }
 
 resource "azurerm_role_assignment" "cert_manager_dns_contributor" {
-  scope                = data.azurerm_subscription.current.id
   role_definition_name = "DNS Zone Contributor"
+  scope                = data.azurerm_subscription.current.id
+  principal_id         = azurerm_user_assigned_identity.deno_cluster.principal_id
+}
+
+resource "azurerm_role_assignment" "storage_blob_data_contributor" {
+  role_definition_name = "Storage Blob Data Contributor"
+  scope                = data.azurerm_subscription.current.id
   principal_id         = azurerm_user_assigned_identity.deno_cluster.principal_id
 }
 
@@ -137,4 +139,3 @@ resource "azurerm_dns_cname_record" "wildcard_record" {
 
   depends_on = [azurerm_dns_zone.deno_cluster]
 }
-

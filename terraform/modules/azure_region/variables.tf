@@ -1,4 +1,3 @@
-
 variable "name" {
   description = "Name for the resource group and all resources within it. Must be unique within the subscription."
   type        = string
@@ -7,7 +6,6 @@ variable "name" {
 variable "region" {
   type = string
 }
-
 
 variable "dns_zone" {
   description = "name of the DNS zone. example: `deno_cluster.net`"
