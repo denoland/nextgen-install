@@ -6,51 +6,59 @@
 # The `/data` directory corresponds to the `spec.containers[0].volumeMounts[0].mountPath`
 # That mount path corresponds to a Kubernetes HostPath which binds `/data` to a local drive or volume on the worker node where the pod runs
 #
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: ReplicaSet
 metadata:
-  labels:
-    app: minio
   name: minio
   namespace: {{ .Release.Namespace }}
 spec:
-  restartPolicy: Always
-  containers:
-  - name: minio
-    image: quay.io/minio/minio:latest
-    command:
-    - /bin/bash
-    - -c
-    args:
-    - minio server /data --console-address :9090
-    env: []
-    # - name: MINIO_ROOT_USER
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: minio
-    #       key: username
-    # - name: MINIO_ROOT_PASSWORD
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: minio
-    #       key: password
-    ports:
-    - containerPort: 9090
-      protocol: TCP
-      name: console
-    - containerPort: 9000
-      protocol: TCP
-      name: api
-    volumeMounts:
-    - mountPath: /data
-      name: localvolume # Corresponds to the `spec.volumes` Persistent Volume
-  # nodeSelector:
-  #   kubernetes.io/hostname: kubealpha.local # Specify a node label associated to the Worker Node on which you want to deploy the pod.
-  volumes:
-  - name: localvolume
-    hostPath: # MinIO generally recommends using locally-attached volumes
-      path: /mnt/disk1/data # Specify a path to a local drive or volume on the Kubernetes worker node
-      type: DirectoryOrCreate # The path to the last directory must exist
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+      name: minio
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:latest
+        command:
+        - /bin/bash
+        - -c
+        args:
+        - minio server /data --console-address :9090
+        env: []
+        # - name: MINIO_ROOT_USER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: minio
+        #       key: username
+        # - name: MINIO_ROOT_PASSWORD
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: minio
+        #       key: password
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+          name: console
+        - containerPort: 9000
+          protocol: TCP
+          name: api
+        volumeMounts:
+        - mountPath: /data
+          name: localvolume # Corresponds to the `spec.volumes` Persistent Volume
+      # nodeSelector:
+      #   kubernetes.io/hostname: kubealpha.local # Specify a node label associated to the Worker Node on which you want to deploy the pod.
+      volumes:
+      - name: localvolume
+        hostPath: # MinIO generally recommends using locally-attached volumes
+          path: /mnt/disk1/data # Specify a path to a local drive or volume on the Kubernetes worker node
+          type: DirectoryOrCreate # The path to the last directory must exist
 ---
 apiVersion: v1
 kind: Service

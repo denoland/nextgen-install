@@ -120,12 +120,6 @@ Note: this script is included for convenience at `helm/deps.sh`.
 Update the values in the example `values.yaml` provided with the values provided
 in the Terraform output. They're highlighted in the example below.
 
-> :warning: You'll note that the storage account credentials aren't available in
-> the Terraform output. To get them, you'll need to log in to the Azure portal,
-> navigate to the storage account and in the "Security + networking" section,
-> choose "Access keys". There you'll find the static access keys required by the
-> chart.
-
 ```yaml
 provider: azure
 region: westus # CHANGE ME
@@ -176,7 +170,7 @@ After installing the Helm chart, the cluster will automatically try to obtain a
 TLS certificate from Let's Encrypt. This might take a few minutes.
 
 To see the progress of the certificate provisioning progress, use the following
-command using Cert Manager's [command line tool][cmctl]:
+command:
 
 ```bash
 cmctl status certificate public-tls-cert
@@ -207,38 +201,28 @@ uses the new certificate:
 kubectl rollout restart deployment/proxy
 ```
 
-# Generate Credentials
-
-The different components in the system need to authenticate with each other, to
-create the secrets required, run the following script:
-
-```bash
-HKDF_SEED=$(openssl rand -hex 32) ../tools/generate_credentials | kubectl apply -f -
-```
-
-Then restart the deployments and stateful set to ensure the use the correct
-secrets.
-
-```bash
-kubectl get deployments -o name | xargs kubectl rollout restart
-kubectl scale statefulset/lscached-serve --replicas=0; kubectl scale statefulset/lscached-serve --replicas 1
-kubectl scale statefulset/svmcd --replicas=0; kubectl scale statefulset/svmcd --replicas 1
-```
-
 # Create a Deployment
 
 In the `tools` directory, we've included a command line utility that creates new
 deployments. You can use it as follows to deploy your first "hello world" app.
 
-Note: substitute `<cluster_domain>` and `<storage_account_name>` for the values
-that were shown after running `terraform apply`, e.g.
-`mycluster.deno-cluster.net` and `mycluster1234`.
+Because we're using Minio as the object store, the deployment script is using
+the AWS cli under the hood, so you'll need to set some environment variables as
+per the example below. To get the external IP for Minio, run `kubectl get
+service minio-external`.
+
+Note: substitute `<cluster_domain>` for the value that were shown after running
+`terraform apply`, e.g. `mycluster.deno-cluster.net`.
 
 ```bash
+AWS_ACCESS_KEY_ID=minioadmin \
+AWS_SECRET_ACCESS_KEY=minioadmin \
+AWS_REGION=westus \
+S3_ENDPOINT=http://<minio_external_ip>:9000 \
 ../tools/ddng deploy \
   -s ../examples/hello \
   -d hello.<cluster_domain> \
-  --az-storage-account <storage_account_name>
+  --s3-bucket deployments
 ```
 
 [aks_creds]: https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli#connect-to-the-cluster
@@ -246,4 +230,3 @@ that were shown after running `terraform apply`, e.g.
 [cmctl]: https://cert-manager.io/docs/reference/cmctl/
 [helm]: https://helm.sh/docs/intro/install/
 [kubectl]: https://kubernetes.io/docs/tasks/tools/#kubectl
-[cmctl]: https://cert-manager.io/docs/reference/cmctl/
