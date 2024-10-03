@@ -278,7 +278,7 @@ kind: Service
 metadata:
   annotations:
   name: lscached-serve
-  namespace: default
+  namespace: {{ .Release.Namespace }}
 spec:
   ports:
     - port: 4522

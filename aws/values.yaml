@@ -1,0 +1,33 @@
+provider: aws
+region: us-west-2 # CHANGE ME
+cluster_name: gargamel # CHANGE ME
+
+aws:
+  subnet: gargamel-subnet1 # CHANGE ME
+  nlb: gargamel-nlb # CHANGE ME
+
+blob:
+  s3:
+    access_key: AKIAQZFG4UYCYLMDB5VC # CHANGE ME
+    secret_key: --------------------------------------- # CHANGE ME
+    code_storage_bucket: gargamel-code-storage-8697bde7 # CHANGE ME
+    cache_storage_bucket: gargamel-lsc-storage-8697bde7 # CHANGE ME
+
+# Uncomment the following block to send logs to an OTLP endpoint.
+# otlp:
+#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
+#   auth:
+#     authenticator: basicauth/otlp
+#     username: "103456"
+#     password: "ghc_xxx"
+
+controller:
+  serviceaccount_annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::0123456789012:role/eks-service-account-8697bde7 # CHANGE ME
+  env:
+    - name: NODE_METRICS_SELECTOR
+      value: karpenter.sh/provisioner-name=default
+
+proxy:
+  serviceaccount_annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::0123456789012:role/eks-service-account-8697bde7 # CHANGE ME

@@ -6,59 +6,52 @@
 # The `/data` directory corresponds to the `spec.containers[0].volumeMounts[0].mountPath`
 # That mount path corresponds to a Kubernetes HostPath which binds `/data` to a local drive or volume on the worker node where the pod runs
 #
-apiVersion: apps/v1
-kind: ReplicaSet
+{{ if ne .Values.provider "aws" }}
+apiVersion: v1
+kind: Pod
 metadata:
+  labels:
+    app: minio
   name: minio
   namespace: {{ .Release.Namespace }}
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: minio
-  template:
-    metadata:
-      labels:
-        app: minio
-      name: minio
-    spec:
-      restartPolicy: Always
-      containers:
-      - name: minio
-        image: quay.io/minio/minio:latest
-        command:
-        - /bin/bash
-        - -c
-        args:
-        - minio server /data --console-address :9090
-        env: []
-        # - name: MINIO_ROOT_USER
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: minio
-        #       key: username
-        # - name: MINIO_ROOT_PASSWORD
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: minio
-        #       key: password
-        ports:
-        - containerPort: 9090
-          protocol: TCP
-          name: console
-        - containerPort: 9000
-          protocol: TCP
-          name: api
-        volumeMounts:
-        - mountPath: /data
-          name: localvolume # Corresponds to the `spec.volumes` Persistent Volume
-      # nodeSelector:
-      #   kubernetes.io/hostname: kubealpha.local # Specify a node label associated to the Worker Node on which you want to deploy the pod.
-      volumes:
-      - name: localvolume
-        hostPath: # MinIO generally recommends using locally-attached volumes
-          path: /mnt/disk1/data # Specify a path to a local drive or volume on the Kubernetes worker node
-          type: DirectoryOrCreate # The path to the last directory must exist
+  restartPolicy: Always
+  containers:
+  - name: minio
+    image: quay.io/minio/minio:latest
+    command:
+    - /bin/bash
+    - -c
+    args:
+    - minio server /data --console-address :9090
+    env: []
+    # - name: MINIO_ROOT_USER
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: minio
+    #       key: username
+    # - name: MINIO_ROOT_PASSWORD
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: minio
+    #       key: password
+    ports:
+    - containerPort: 9090
+      protocol: TCP
+      name: console
+    - containerPort: 9000
+      protocol: TCP
+      name: api
+    volumeMounts:
+    - mountPath: /data
+      name: localvolume # Corresponds to the `spec.volumes` Persistent Volume
+  # nodeSelector:
+  #   kubernetes.io/hostname: kubealpha.local # Specify a node label associated to the Worker Node on which you want to deploy the pod.
+  volumes:
+  - name: localvolume
+    hostPath: # MinIO generally recommends using locally-attached volumes
+      path: /mnt/disk1/data # Specify a path to a local drive or volume on the Kubernetes worker node
+      type: DirectoryOrCreate # The path to the last directory must exist
 ---
 apiVersion: v1
 kind: Service
@@ -106,8 +99,8 @@ metadata:
 data:
   "script.sh": |
     sleep 30
-    aws s3 --endpoint=$S3_ENDPOINT ls s3://{{ .Values.blob.minio.code_storage_bucket }} || aws s3api --endpoint=$S3_ENDPOINT create-bucket --bucket={{ .Values.blob.minio.code_storage_bucket }}
-    aws s3 --endpoint=$S3_ENDPOINT ls s3://{{ .Values.blob.minio.cache_storage_bucket }} ||aws s3api --endpoint=$S3_ENDPOINT create-bucket --bucket={{ .Values.blob.minio.cache_storage_bucket }}
+    aws s3api --endpoint=$S3_ENDPOINT create-bucket --bucket={{ .Values.blob.minio.code_storage_bucket }}
+    aws s3api --endpoint=$S3_ENDPOINT create-bucket --bucket={{ .Values.blob.minio.cache_storage_bucket }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -136,7 +129,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: post-install-job
-        image: amazon/aws-cli:latest
+        image: amazon/aws-cli:latest # "ghcr.io/willnewby/kshell:latest"
         command: ["/bin/bash", "/post-install-script/script.sh"]
         env:
           - name: AWS_ACCESS_KEY_ID
@@ -157,3 +150,4 @@ spec:
         - name: post-install-script
           configMap:
             name: post-install-script
+{{ end }}
