@@ -143,9 +143,15 @@ async function deploy(args: DeployArgs) {
     let uploadCommand: Deno.Command;
 
     if (args.s3Bucket) {
+      const endpoint = Deno.env.get("S3_ENDPOINT");
+
       codeUrl = `s3://${args.s3Bucket}/${codePath}`;
+      const cmdArgs = ["s3", "cp", join(tempDir, "pkg.tar"), codeUrl];
+      if (endpoint !== undefined) {
+        cmdArgs.push(`--endpoint=${endpoint}`);
+      }
       uploadCommand = new Deno.Command("aws", {
-        args: ["s3", "cp", join(tempDir, "pkg.tar"), codeUrl],
+        args: cmdArgs,
         stdout: "inherit",
         stderr: "inherit",
       });
@@ -209,8 +215,15 @@ async function deploy(args: DeployArgs) {
     // Update hostmap
     console.log("Updating hostmap...");
     if (args.s3Bucket) {
+      const endpoint = Deno.env.get("S3_ENDPOINT");
+
+      codeUrl = `s3://${args.s3Bucket}/${codePath}`;
+      const cmdArgs = ["s3", "cp", "-", `s3://${args.s3Bucket}/hostmap/${args.domain}`];
+      if (endpoint !== undefined) {
+        cmdArgs.push(`--endpoint=${endpoint}`);
+      }
       const updateHostmapCommand = new Deno.Command("aws", {
-        args: ["s3", "cp", "-", `s3://${args.s3Bucket}/hostmap/${args.domain}`],
+        args: cmdArgs,
         stdout: "inherit",
         stderr: "inherit",
         stdin: "piped",

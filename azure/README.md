@@ -120,12 +120,6 @@ Note: this script is included for convenience at `helm/deps.sh`.
 Update the values in the example `values.yaml` provided with the values provided
 in the Terraform output. They're highlighted in the example below.
 
-> :warning: You'll note that the storage account credentials aren't available in
-> the Terraform output. To get them, you'll need to log in to the Azure portal,
-> navigate to the storage account and in the "Security + networking" section,
-> choose "Access keys". There you'll find the static access keys required by the
-> chart.
-
 ```yaml
 provider: azure
 region: westus # CHANGE ME
@@ -142,10 +136,7 @@ azure:
   user_assigned_identity_client_id: UUID # CHANGE ME
 
 blob:
-  azure:
-    storage_account: mystorageaccount # CHANGE ME
-    storage_account_endpoint: https://mystorageaccount.blob.core.windows.net # CHANGE ME
-    credentials: supersecret credentials # CHANGE ME
+  minio:
     cache_storage_bucket: cache
     code_storage_bucket: deployments
     hostmap_storage_bucket: deployments
@@ -159,19 +150,10 @@ blob:
 #     password: "ghc_xxx"
 
 controller:
-  image: docker.io/denoland/cluster-controller:v0.0.4
-  env:
-    - name: ISOLATE_WORKER_CONTAINER_IMAGE
-      value: docker.io/denoland/cluster-isolate-worker:v0.0.4
+  serviceaccount_annotations: {}
 
 proxy:
-  image: docker.io/denoland/cluster-proxy:v0.0.4
-
-lscached:
-  image: docker.io/denoland/cluster-lscached:v0.0.4
-
-s3proxy:
-  image: docker.io/denoland/cluster-s3proxy:v0.0.4
+  serviceaccount_annotations: {}
 ```
 
 Then, install the `deno-cluster` Helm chart.
@@ -224,15 +206,23 @@ kubectl rollout restart deployment/proxy
 In the `tools` directory, we've included a command line utility that creates new
 deployments. You can use it as follows to deploy your first "hello world" app.
 
-Note: substitute `<cluster_domain>` and `<storage_account_name>` for the values
-that were shown after running `terraform apply`, e.g.
-`mycluster.deno-cluster.net` and `mycluster1234`.
+Because we're using Minio as the object store, the deployment script is using
+the AWS cli under the hood, so you'll need to set some environment variables as
+per the example below. To get the external IP for Minio, run `kubectl get
+service minio-external`.
+
+Note: substitute `<cluster_domain>` for the value that were shown after running
+`terraform apply`, e.g. `mycluster.deno-cluster.net`.
 
 ```bash
+AWS_ACCESS_KEY_ID=minioadmin \
+AWS_SECRET_ACCESS_KEY=minioadmin \
+AWS_REGION=westus \
+S3_ENDPOINT=http://<minio_external_ip>:9000 \
 ../tools/ddng deploy \
   -s ../examples/hello \
   -d hello.<cluster_domain> \
-  --az-storage-account <storage_account_name>
+  --s3-bucket deployments
 ```
 
 [aks_creds]: https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli#connect-to-the-cluster
