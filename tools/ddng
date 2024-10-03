@@ -1,4 +1,5 @@
 #! /usr/bin/env -S deno run --ext=ts --allow-read --allow-write --allow-env --allow-net --allow-run --allow-sys
+// Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
 
 import { parseArgs } from "jsr:@std/cli@1.0.3/parse-args";
 import { join } from "jsr:@std/path@1.0.3/join";
@@ -38,13 +39,12 @@ async function deploy(args: DeployArgs) {
 
   const sourceDir = args.sourceDir || Deno.cwd();
   let entryPoint = args.entryPoint;
-  const subhoster = "localdev";
 
   // Extract root domain by stripping the first label from the deployment domain
   const clusterDomain = args.domain.split(".").slice(1).join(".");
 
   // Prepare temp directory
-  const tempDir = await Deno.makeTempDir({ prefix: "star-shaped-hole-deploy" });
+  const tempDir = await Deno.makeTempDir({ prefix: "deno-cluster" });
 
   try {
     await ensureDir(join(tempDir, "pkg", "deno_dir"));
@@ -202,7 +202,7 @@ async function deploy(args: DeployArgs) {
     const optimizeCommand = fetch(`https://${clusterDomain}`, {
       method: "GET",
       headers: {
-        "x-deno-deployment-id": `${subhoster}/${layeredCodeUrl}`,
+        "x-deno-deployment-id": layeredCodeUrl,
       },
     });
     const optimizeResponse = await optimizeCommand;

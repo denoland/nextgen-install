@@ -6,6 +6,7 @@
 # The `/data` directory corresponds to the `spec.containers[0].volumeMounts[0].mountPath`
 # That mount path corresponds to a Kubernetes HostPath which binds `/data` to a local drive or volume on the worker node where the pod runs
 #
+{{ if ne .Values.provider "aws" }}
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
@@ -157,3 +158,4 @@ spec:
         - name: post-install-script
           configMap:
             name: post-install-script
+{{- end }}
