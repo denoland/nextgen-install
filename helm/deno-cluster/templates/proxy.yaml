@@ -1,3 +1,15 @@
+# Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: proxy
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- range $k, $v := .Values.proxy.serviceaccount_annotations }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,7 +44,7 @@ spec:
               {{- end }}
       priorityClassName: deno-system-high-priority
       containers:
-        - image: {{ .Values.proxy.image }}
+        - image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-proxy:{{ default .Chart.AppVersion (.Values.proxy).version }}
           imagePullPolicy: IfNotPresent
           name: proxy
           ports:
@@ -45,6 +57,9 @@ spec:
           envFrom:
             - secretRef:
                 name: proxy-credentials
+          env:
+            - name: OIDC_ISS
+              value: http://controller.default.svc.cluster.local:4000
           volumeMounts:
             - name: subhoster-config
               mountPath: /app/subhoster-config
@@ -68,6 +83,7 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       restartPolicy: Always
+      serviceAccount: proxy
       terminationGracePeriodSeconds: 0
 ---
 apiVersion: v1
@@ -95,7 +111,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   ports:
-  - port: {{ .Values.proxy.service_port | default 443 }}
+  - port: {{ default 443 (.Values.proxy).service_port }}
     protocol: TCP
     targetPort: 8080
   selector:
@@ -104,3 +120,40 @@ spec:
   {{- if eq .Values.provider "aws" }}
   loadBalancerClass: service.k8s.aws/nlb
   {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: proxy
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: proxy-binding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: proxy
+subjects:
+  - kind: ServiceAccount
+    name: proxy
+    namespace: {{ .Release.Namespace }}

@@ -2,18 +2,6 @@ output "dns_zone_ns_records" {
   value = azurerm_dns_zone.deno_cluster.name_servers
 }
 
-output "storage_account_name" {
-  value = azurerm_storage_account.deno_cluster.name
-}
-
-output "storage_account_endpoint" {
-  value = azurerm_storage_account.deno_cluster.primary_blob_endpoint
-}
-
-output "storage_account_key" {
-  value = azurerm_storage_account.deno_cluster.primary_access_key
-}
-
 output "resource_group_name" {
   value = azurerm_resource_group.deno_cluster.name
 }

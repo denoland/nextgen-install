@@ -1,0 +1,151 @@
+# Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+#
+# Deploys a new MinIO Pod into the metadata.namespace Kubernetes namespace
+#
+# The `spec.containers[0].args` contains the command run on the pod
+# The `/data` directory corresponds to the `spec.containers[0].volumeMounts[0].mountPath`
+# That mount path corresponds to a Kubernetes HostPath which binds `/data` to a local drive or volume on the worker node where the pod runs
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: minio
+  name: minio
+  namespace: {{ .Release.Namespace }}
+spec:
+  restartPolicy: Always
+  containers:
+  - name: minio
+    image: quay.io/minio/minio:latest
+    command:
+    - /bin/bash
+    - -c
+    args:
+    - minio server /data --console-address :9090
+    env: []
+    # - name: MINIO_ROOT_USER
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: minio
+    #       key: username
+    # - name: MINIO_ROOT_PASSWORD
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: minio
+    #       key: password
+    ports:
+    - containerPort: 9090
+      protocol: TCP
+      name: console
+    - containerPort: 9000
+      protocol: TCP
+      name: api
+    volumeMounts:
+    - mountPath: /data
+      name: localvolume # Corresponds to the `spec.volumes` Persistent Volume
+  # nodeSelector:
+  #   kubernetes.io/hostname: kubealpha.local # Specify a node label associated to the Worker Node on which you want to deploy the pod.
+  volumes:
+  - name: localvolume
+    hostPath: # MinIO generally recommends using locally-attached volumes
+      path: /mnt/disk1/data # Specify a path to a local drive or volume on the Kubernetes worker node
+      type: DirectoryOrCreate # The path to the last directory must exist
+---
+apiVersion: v1
+kind: Service
+metadata:
+#   annotations:
+#     service.beta.kubernetes.io/azure-dns-label-name: deno-cluster-minio
+  name: minio
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - port: 9000
+      protocol: TCP
+      targetPort: 9000
+      name: api
+    - port: 9090
+      protocol: TCP
+      targetPort: 9090
+      name: console
+  selector:
+    app: minio
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/azure-dns-label-name: deno-cluster-minio
+  name: minio-external
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - port: 9000
+      protocol: TCP
+      targetPort: 9000
+      name: api
+  selector:
+    app: minio
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: post-install-script
+  namespace: {{ .Release.Namespace }}
+data:
+  "script.sh": |
+    sleep 30
+    aws s3 --endpoint=$S3_ENDPOINT ls s3://{{ .Values.blob.minio.code_storage_bucket }} || aws s3api --endpoint=$S3_ENDPOINT create-bucket --bucket={{ .Values.blob.minio.code_storage_bucket }}
+    aws s3 --endpoint=$S3_ENDPOINT ls s3://{{ .Values.blob.minio.cache_storage_bucket }} ||aws s3api --endpoint=$S3_ENDPOINT create-bucket --bucket={{ .Values.blob.minio.cache_storage_bucket }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ .Release.Name }}"
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: "{{ .Release.Name }}"
+      labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: post-install-job
+        image: amazon/aws-cli:latest
+        command: ["/bin/bash", "/post-install-script/script.sh"]
+        env:
+          - name: AWS_ACCESS_KEY_ID
+            value: "minioadmin"
+          - name: AWS_SECRET_ACCESS_KEY
+            value: "minioadmin"
+          - name: AWS_REGION
+            value: {{ .Values.region }}
+          - name: AWS_EC2_METADATA_DISABLED
+            value: "true"
+          - name: S3_ENDPOINT
+            value: "http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000"
+        volumeMounts:
+            - name: post-install-script
+              mountPath: /post-install-script
+              readOnly: true
+      volumes:
+        - name: post-install-script
+          configMap:
+            name: post-install-script

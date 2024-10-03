@@ -142,10 +142,7 @@ azure:
   user_assigned_identity_client_id: UUID # CHANGE ME
 
 blob:
-  azure:
-    storage_account: mystorageaccount # CHANGE ME
-    storage_account_endpoint: https://mystorageaccount.blob.core.windows.net # CHANGE ME
-    credentials: supersecret credentials # CHANGE ME
+  minio:
     cache_storage_bucket: cache
     code_storage_bucket: deployments
     hostmap_storage_bucket: deployments
@@ -159,19 +156,10 @@ blob:
 #     password: "ghc_xxx"
 
 controller:
-  image: docker.io/denoland/cluster-controller:v0.0.4
-  env:
-    - name: ISOLATE_WORKER_CONTAINER_IMAGE
-      value: docker.io/denoland/cluster-isolate-worker:v0.0.4
+  serviceaccount_annotations: {}
 
 proxy:
-  image: docker.io/denoland/cluster-proxy:v0.0.4
-
-lscached:
-  image: docker.io/denoland/cluster-lscached:v0.0.4
-
-s3proxy:
-  image: docker.io/denoland/cluster-s3proxy:v0.0.4
+  serviceaccount_annotations: {}
 ```
 
 Then, install the `deno-cluster` Helm chart.
@@ -188,7 +176,7 @@ After installing the Helm chart, the cluster will automatically try to obtain a
 TLS certificate from Let's Encrypt. This might take a few minutes.
 
 To see the progress of the certificate provisioning progress, use the following
-command:
+command using Cert Manager's [command line tool][cmctl]:
 
 ```bash
 cmctl status certificate public-tls-cert
@@ -219,6 +207,24 @@ uses the new certificate:
 kubectl rollout restart deployment/proxy
 ```
 
+# Generate Credentials
+
+The different components in the system need to authenticate with each other, to
+create the secrets required, run the following script:
+
+```bash
+HKDF_SEED=$(openssl rand -hex 32) ../tools/generate_credentials | kubectl apply -f -
+```
+
+Then restart the deployments and stateful set to ensure the use the correct
+secrets.
+
+```bash
+kubectl get deployments -o name | xargs kubectl rollout restart
+kubectl scale statefulset/lscached-serve --replicas=0; kubectl scale statefulset/lscached-serve --replicas 1
+kubectl scale statefulset/svmcd --replicas=0; kubectl scale statefulset/svmcd --replicas 1
+```
+
 # Create a Deployment
 
 In the `tools` directory, we've included a command line utility that creates new
@@ -240,3 +246,4 @@ that were shown after running `terraform apply`, e.g.
 [cmctl]: https://cert-manager.io/docs/reference/cmctl/
 [helm]: https://helm.sh/docs/intro/install/
 [kubectl]: https://kubernetes.io/docs/tasks/tools/#kubectl
+[cmctl]: https://cert-manager.io/docs/reference/cmctl/

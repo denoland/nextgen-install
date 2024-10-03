@@ -68,28 +68,6 @@ resource "random_string" "storage_account_suffix" {
   }
 }
 
-resource "azurerm_storage_account" "deno_cluster" {
-  name                = "${replace(azurerm_resource_group.deno_cluster.name, "/[^\\w]/", "")}${random_string.storage_account_suffix.id}"
-  resource_group_name = azurerm_resource_group.deno_cluster.name
-  location            = var.region
-
-  account_tier                    = "Standard"
-  account_replication_type        = "LRS"
-  allow_nested_items_to_be_public = false
-}
-
-resource "azurerm_storage_container" "deployments_storage_container" {
-  name                  = "deployments"
-  storage_account_name  = azurerm_storage_account.deno_cluster.name
-  container_access_type = "private"
-}
-
-resource "azurerm_storage_container" "cache_storage_container" {
-  name                  = "cache"
-  storage_account_name  = azurerm_storage_account.deno_cluster.name
-  container_access_type = "private"
-}
-
 resource "azurerm_user_assigned_identity" "deno_cluster" {
   name                = "${azurerm_resource_group.deno_cluster.name}-identity"
   location            = var.region

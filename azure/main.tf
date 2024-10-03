@@ -41,11 +41,3 @@ output "aks_cluster_name" {
 output "deno_cluster_user_assigned_identity_client_id" {
   value = module.azure_region.deno_cluster_user_assigned_identity_client_id
 }
-
-output "storage_account_name" {
-  value = module.azure_region.storage_account_name
-}
-
-output "storage_account_endpoint" {
-  value = module.azure_region.storage_account_endpoint
-}

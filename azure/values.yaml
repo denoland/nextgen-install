@@ -13,10 +13,7 @@ azure:
   user_assigned_identity_client_id: UUID # CHANGE ME
 
 blob:
-  azure:
-    storage_account: mystorageaccount # CHANGE ME
-    storage_account_endpoint: https://mystorageaccount.blob.core.windows.net # CHANGE ME
-    credentials: supersecret credentials # CHANGE ME
+  minio:
     cache_storage_bucket: cache
     code_storage_bucket: deployments
     hostmap_storage_bucket: deployments
@@ -30,18 +27,7 @@ blob:
 #     password: "ghc_xxx"
 
 controller:
-  image: docker.io/denoland/cluster-controller:v0.0.4
-  # min_isolate_workers_replicas: 10
-  # max_isolate_workers_replicas: 100
-  env:
-    - name: ISOLATE_WORKER_CONTAINER_IMAGE
-      value: docker.io/denoland/cluster-isolate-worker:v0.0.4
+  serviceaccount_annotations: {}
 
 proxy:
-  image: docker.io/denoland/cluster-proxy:v0.0.4
-
-lscached:
-  image: docker.io/denoland/cluster-lscached:v0.0.4
-
-s3proxy:
-  image: docker.io/denoland/cluster-s3proxy:v0.0.4
+  serviceaccount_annotations: {}
