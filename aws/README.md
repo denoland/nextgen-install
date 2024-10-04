@@ -35,7 +35,7 @@ while `terraform apply` is running.
 Take note of the outputs of the plan, you'll need these values later to
 configure your Deno Cluster installation.
 
-:note: `secret_access_key` output is sensitive and should be treated as a
+Note: `secret_access_key` output is sensitive and should be treated as a
 secret. run `terraform output secret_access_key` to get the value.
 
 ## DNS Configuration
