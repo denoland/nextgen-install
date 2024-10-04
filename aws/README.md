@@ -27,10 +27,15 @@ locals {
 Finally, run `terraform init` to initialize the Terraform configuration and run
 `terraform apply` to create the resources.
 
+:warning: `terraform apply` will not complete until a certificate for the domain is
+issued by AWS and validated. Certificate validation requires DNS delegation to
+AWS, which is covered in the next section. Please proceed to [DNS Configuration](#dns-configuration)
+while `terraform apply` is running.
+
 Take note of the outputs of the plan, you'll need these values later to
 configure your Deno Cluster installation.
 
-:warning: `secret_access_key` output is sensitive and should be treated as a
+:note: `secret_access_key` output is sensitive and should be treated as a
 secret. run `terraform output secret_access_key` to get the value.
 
 ## DNS Configuration
