@@ -155,7 +155,7 @@ Note: substitute `<code-storage-bucket>`for the value from the terraform output,
 ../tools/ddng deploy \
   -s ../examples/hello \
   -d hello.<cluster_domain> \
-  --s3-bucket <code-storage-bucket>a
+  --s3-bucket <code-storage-bucket>
 ```
 
 [aws]: https://aws.amazon.com/cli/
