@@ -1,0 +1,74 @@
+# Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
+{{- if eq .Values.provider "aws" }}
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: default
+spec:
+  kubeletConfiguration:
+    maxPods: 205
+  providerRef:
+    name: default
+  consolidation:
+    enabled: true
+  taints:
+  - effect: NoSchedule
+    key: isolate-worker
+  requirements:
+    - key: karpenter.k8s.aws/instance-hypervisor
+      operator: In
+      values:
+        - nitro
+    - key: kubernetes.io/os
+      operator: In
+      values:
+        - linux
+    - key: kubernetes.io/arch
+      operator: In
+      values:
+        - amd64
+    - key: karpenter.sh/capacity-type
+      operator: In
+      values:
+        - spot
+        - on-demand
+    - key: karpenter.k8s.aws/instance-category
+      operator: In
+      values:
+        - m
+    - key: karpenter.k8s.aws/instance-generation
+      operator: In
+      values:
+        - "7"
+        - "6"
+    - key: karpenter.k8s.aws/instance-cpu
+      operator: In
+      values:
+        - "2"
+---
+apiVersion: karpenter.k8s.aws/v1alpha1
+kind: AWSNodeTemplate
+metadata:
+  name: default
+spec:
+  amiFamily: Bottlerocket
+  securityGroupSelector:
+    karpenter.sh/discovery: {{ .Values.cluster_name }}
+  subnetSelector:
+    karpenter.sh/discovery: {{ .Values.cluster_name }}
+  userData: |
+    # Tell BottleRocket to reboot when it is necessary for certain changes
+    # made below (in particular: 'systemd.unified_cgroup_hierarchy') to take
+    # effect.
+    [settings.boot]
+    reboot-to-reconcile = true
+    # Force the use of cgroups v1. This is required for the runner's CPU
+    # quota utilization reporting to work correctly.
+    [settings.boot.init]
+    "systemd.unified_cgroup_hierarchy" = ["0"]
+    # On BottleRocket, `max_user_namespaces` is set to 0 by default. Bump it
+    # to 30985, which matches the default limit for `max_mnt_namespaces`.
+    [settings.kernel.sysctl]
+    "user.max_user_namespaces" = "30985"
+{{- end }}
