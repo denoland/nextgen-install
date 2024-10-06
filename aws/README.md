@@ -94,8 +94,6 @@ helm install \
   --create-namespace \
   --version v1.15.3 \
   --set crds.enabled=true \
-  --set-json 'podLabels={"azure.workload.identity/use": "true"}' \
-  --set-json 'serviceAccount={"labels": {"azure.workload.identity/use": "true"}}' \
   --set enableCertificateOwnerRef=true \
   --set dns01RecursiveNameserversOnly=true
 
