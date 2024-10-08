@@ -8,6 +8,10 @@ output "iam_serviceaccount_role_arn" {
   value = aws_iam_role.eks_service_account.arn
 }
 
+output "iam_s3_serviceaccount_role_arn" {
+  value = aws_iam_role.eks_lscached_service_account.arn
+}
+
 output "code_storage_bucket" {
   value = aws_s3_bucket.code_storage.bucket
 }

@@ -1,3 +1,5 @@
+// Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
 provider "azurerm" {
   subscription_id = "522b185c-ec06-4a7d-83bb-21278d70f057" # <- Fill in your Azure subscription ID here.
   environment     = "public"
