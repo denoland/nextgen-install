@@ -22,7 +22,15 @@ resource "kubernetes_service" "nlb_proxy_service" {
 
   spec {
     port {
+      name        = "https"
       port        = 443
+      protocol    = "TCP"
+      target_port = 8443
+    }
+
+    port {
+      name        = "http"
+      port        = 80
       protocol    = "TCP"
       target_port = 8080
     }
