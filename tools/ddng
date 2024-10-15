@@ -111,8 +111,13 @@ async function deploy(args: DeployArgs) {
 
     // Cache dependencies
     const cacheCommand = new Deno.Command("deno", {
-      env: { "DENO_DIR": join(tempDir, "pkg", "deno_dir"), "DENO_FUTURE": "1" },
-      args: ["cache", join(tempDir, "pkg", "src", entryPoint)],
+      env: { "DENO_DIR": join(tempDir, "pkg", "deno_dir") },
+      args: [
+        "install",
+        "--allow-import",
+        "--entrypoint",
+        join(tempDir, "pkg", "src", entryPoint),
+      ],
       stdout: "inherit",
       stderr: "inherit",
     });
@@ -199,7 +204,7 @@ async function deploy(args: DeployArgs) {
 
     // Make a HTTP request to the cluster to trigger deployment
     console.log("Optimizing deployment...");
-    const optimizeCommand = fetch(`https://${clusterDomain}`, {
+    const optimizeCommand = fetch(`https://${args.domain}`, {
       method: "GET",
       headers: {
         "x-deno-deployment-id": layeredCodeUrl,
@@ -218,7 +223,12 @@ async function deploy(args: DeployArgs) {
       const endpoint = Deno.env.get("S3_ENDPOINT");
 
       codeUrl = `s3://${args.s3Bucket}/${codePath}`;
-      const cmdArgs = ["s3", "cp", "-", `s3://${args.s3Bucket}/hostmap/${args.domain}`];
+      const cmdArgs = [
+        "s3",
+        "cp",
+        "-",
+        `s3://${args.s3Bucket}/hostmap/${args.domain}`,
+      ];
       if (endpoint !== undefined) {
         cmdArgs.push(`--endpoint=${endpoint}`);
       }
@@ -303,6 +313,11 @@ function usage() {
 }
 
 if (import.meta.main) {
+  if (+Deno.version.deno.replace(/\..*$/, "") < 2) {
+    console.error("This program requires deno version 2.0.0 or higher");
+    Deno.exit(1);
+  }
+
   const args = parseArgs(Deno.args, {
     string: [
       "domain",
