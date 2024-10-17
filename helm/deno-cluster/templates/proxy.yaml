@@ -48,7 +48,7 @@ spec:
           imagePullPolicy: IfNotPresent
           name: proxy
           ports:
-            - containerPort: 8080
+            - containerPort: 8443
               name: runner
               protocol: TCP
           resources: {}
@@ -90,7 +90,7 @@ spec:
       serviceAccount: proxy
       terminationGracePeriodSeconds: 0
 ---
-{{- if eq .Values.provider "azure" }}
+{{- if ne .Values.provider "aws" }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -101,7 +101,12 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   ports:
-  - port: {{ default 443 (.Values.proxy).service_port }}
+  - name: service-port
+    port: {{ default 443 (.Values.proxy).service_port }}
+    protocol: TCP
+    targetPort: 8443
+  - name: http-redirect-port
+    port: {{ default 80 (.Values.proxy).http_redirect_port }}
     protocol: TCP
     targetPort: 8080
   selector:

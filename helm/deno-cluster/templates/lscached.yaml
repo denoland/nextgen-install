@@ -1,5 +1,14 @@
 # Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
-
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lscached
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- range $k, $v := .Values.lscached.serviceaccount_annotations }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -17,6 +26,7 @@ spec:
       labels:
         app: lscached-serve
     spec:
+      serviceAccountName: lscached
       containers:
       - args:
         - /lscached
@@ -65,10 +75,6 @@ spec:
         {{- else if eq .Values.provider "aws" }}
         - name: LSC_S3_BUCKET
           value: {{ .Values.blob.s3.cache_storage_bucket }}
-        - name: AWS_ACCESS_KEY_ID
-          value: {{ .Values.blob.s3.access_key }}
-        - name: AWS_SECRET_ACCESS_KEY
-          value: {{ .Values.blob.s3.secret_key }}
         {{- end }}
         - name: LSC_S3_PREFIX
           value: default/
@@ -113,6 +119,7 @@ spec:
         metadata:
           name: lscached-dwb
         spec:
+          serviceAccountName: lscached
           containers:
           - args:
             - /lscached
@@ -139,10 +146,6 @@ spec:
             {{- else if eq .Values.provider "aws" }}
             - name: LSC_S3_BUCKET
               value: {{ .Values.blob.s3.cache_storage_bucket }}
-            - name: AWS_ACCESS_KEY_ID
-              value: {{ .Values.blob.s3.access_key }}
-            - name: AWS_SECRET_ACCESS_KEY
-              value: {{ .Values.blob.s3.secret_key }}
             {{- end }}
             - name: LSC_S3_PREFIX
               value: default/
@@ -172,6 +175,7 @@ spec:
         metadata:
           name: lscached-gc
         spec:
+          serviceAccountName: lscached
           containers:
           - args:
             - /lscached
@@ -198,10 +202,6 @@ spec:
             {{- else if eq .Values.provider "aws" }}
             - name: LSC_S3_BUCKET
               value: {{ .Values.blob.s3.cache_storage_bucket }}
-            - name: AWS_ACCESS_KEY_ID
-              value: {{ .Values.blob.s3.access_key }}
-            - name: AWS_SECRET_ACCESS_KEY
-              value: {{ .Values.blob.s3.secret_key }}
             {{- end }}
             - name: LSC_S3_PREFIX
               value: default/
@@ -231,6 +231,7 @@ spec:
         metadata:
           name: lscached-merge
         spec:
+          serviceAccountName: lscached
           containers:
           - args:
             - /lscached
@@ -257,10 +258,6 @@ spec:
             {{- else if eq .Values.provider "aws" }}
             - name: LSC_S3_BUCKET
               value: {{ .Values.blob.s3.cache_storage_bucket }}
-            - name: AWS_ACCESS_KEY_ID
-              value: {{ .Values.blob.s3.access_key }}
-            - name: AWS_SECRET_ACCESS_KEY
-              value: {{ .Values.blob.s3.secret_key }}
             {{- end }}
             - name: LSC_S3_PREFIX
               value: default/

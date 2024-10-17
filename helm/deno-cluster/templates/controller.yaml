@@ -252,10 +252,6 @@ spec:
         - name: HOSTMAP_SOURCE_default
           value: '{"hostname":"*","s3Endpoint":"http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000","s3Bucket":{{ quote .Values.blob.minio.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
         {{- else if .Values.blob.s3 }}
-        - name: AWS_ACCESS_KEY_ID
-          value: {{ .Values.blob.s3.access_key }}
-        - name: AWS_SECRET_ACCESS_KEY
-          value: {{ .Values.blob.s3.secret_key }}
         - name: HOSTMAP_SOURCE_default
           value: '{"hostname":"*","s3Bucket":{{ quote .Values.blob.s3.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
         {{- end }}
