@@ -35,9 +35,6 @@ while `terraform apply` is running.
 Take note of the outputs of the plan, you'll need these values later to
 configure your Deno Cluster installation.
 
-Note: `secret_access_key` output is sensitive and should be treated as a
-secret. run `terraform output secret_access_key` to get the value.
-
 ## DNS Configuration
 
 In your domain registrar or DNS provider, delegate the DNS zone for your cluster
@@ -109,46 +106,9 @@ Note: this script is included for convenience at `helm/deps.sh`.
 
 # Install The Deno Cluster Helm Chart
 
-Update the values in the example `values.yaml` provided with the values provided
-in the Terraform output. They're highlighted in the example below.
-
-```yaml
-provider: aws
-region: us-west-2 # CHANGE ME
-hostname: mycluster.deno-cluster.net # CHANGE ME
-
-aws:
-  subnet: deno-cluster-01-subnet1 # CHANGE ME
-  nlb: deno-cluster-01-nlb # CHANGE ME
-
-blob:
-  s3:
-    access_key: 0123456789ABCDEFGHIJ # CHANGE ME
-    secret_key: ------------------------------ # CHANGE ME
-    code_storage_bucket: deno-cluster-01-code-storage-f65ef9c1 # CHANGE ME
-    cache_storage_bucket: deno-cluster-01-lsc-storage-f65ef9c1 # CHANGE ME
-
-# Uncomment the following block to send logs to an OTLP endpoint.
-# otlp:
-#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
-#   auth:
-#     authenticator: basicauth/otlp
-#     username: "103456"
-#     password: "ghc_xxx"
-
-controller:
-  serviceaccount_annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::0123456789012:role/eks-service-account-f65ef9c1 # CHANGE ME
-  env:
-    - name: NODE_METRICS_SELECTOR
-      value: karpenter.sh/provisioner-name=default
-
-proxy:
-  serviceaccount_annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::0123456789012:role/eks-service-account-f65ef9c1 # CHANGE ME
-```
-
-Then, install the `deno-cluster` Helm chart.
+Terraform should have created a file called `values.yaml` in the working
+directory, make sure it exists before installing the chart with the following
+command:
 
 :warning: The Helm chart must be installed into the `default` namespace.
 

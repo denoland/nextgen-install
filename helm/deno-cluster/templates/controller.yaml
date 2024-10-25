@@ -6,6 +6,8 @@ metadata:
   name: controller
   namespace: {{ .Release.Namespace }}
   annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "0"
     {{- range $k, $v := .Values.controller.serviceaccount_annotations }}
     {{ $k }}: {{ $v }}
     {{- end }}
@@ -13,7 +15,9 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  annotations: {}
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "0"
   name: controller
   namespace: {{ .Release.Namespace }}
 rules:
@@ -91,6 +95,9 @@ kind: RoleBinding
 metadata:
   name: controller-binding
   namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "0"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -157,10 +164,51 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: controller-cluster-info
+  namespace: {{ .Release.Namespace }}
+data:
+  "api_endpoint": "https://api.{{ .Values.hostname }}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: primary-controller-lock
   namespace: {{ .Release.Namespace }}
   labels:
     app: primary-controller-lock
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ .Release.Name }}-credentials-init"
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: "{{ .Release.Name }}-credentials-init"
+      labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: controller
+      containers:
+      - name: controller
+        image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-controller:{{ default .Chart.AppVersion (.Values.controller).version }}
+        env:
+          - name: DO_CREDENTIALS_INIT
+            value: "1"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -229,6 +277,8 @@ spec:
           value: svmcd.{{ .Release.Namespace }}.svc.cluster.local:7293
         - name: LSC_ENDPOINT
           value: http://lscached-serve.{{ .Release.Namespace }}.svc.cluster.local:4522
+        - name: OIDC_ISS
+          value: http://controller.{{ .Release.Namespace }}.svc.cluster.local:4000
         - name: KUBELET_TLS_CA
           valueFrom:
             configMapKeyRef:
@@ -252,10 +302,6 @@ spec:
         - name: HOSTMAP_SOURCE_default
           value: '{"hostname":"*","s3Endpoint":"http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000","s3Bucket":{{ quote .Values.blob.minio.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
         {{- else if .Values.blob.s3 }}
-        - name: AWS_ACCESS_KEY_ID
-          value: {{ .Values.blob.s3.access_key }}
-        - name: AWS_SECRET_ACCESS_KEY
-          value: {{ .Values.blob.s3.secret_key }}
         - name: HOSTMAP_SOURCE_default
           value: '{"hostname":"*","s3Bucket":{{ quote .Values.blob.s3.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
         {{- end }}

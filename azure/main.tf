@@ -1,3 +1,5 @@
+// Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
 provider "azurerm" {
   subscription_id = "522b185c-ec06-4a7d-83bb-21278d70f057" # <- Fill in your Azure subscription ID here.
   environment     = "public"
@@ -40,4 +42,9 @@ output "aks_cluster_name" {
 
 output "deno_cluster_user_assigned_identity_client_id" {
   value = module.azure_region.deno_cluster_user_assigned_identity_client_id
+}
+
+resource "local_file" "values_yaml" {
+    content  = module.azure_region.values_yaml
+    filename = "values.yaml"
 }

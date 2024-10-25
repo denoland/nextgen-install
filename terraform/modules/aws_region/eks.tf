@@ -286,6 +286,7 @@ module "eks" {
 
   authentication_mode = "API_AND_CONFIG_MAP"
 
+
   enable_cluster_creator_admin_permissions = var.enable_cluster_creator_admin_permissions
 
   cluster_ip_family = "ipv6"
@@ -309,18 +310,11 @@ module "eks" {
   }
 
   eks_managed_node_groups = {
-    static = {
+    static = merge({
       name            = "static"
       use_name_prefix = false
-      # Starting on 1.30, AL2023 is the default AMI type for EKS managed node groups
-      ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3a.medium"]
-      spot           = true
-      subnet_ids     = [aws_subnet.shh_subnet1.id]
-      min_size       = 1
-      max_size       = 1
-      desired_size   = 1
-    }
+      subnet_ids      = [aws_subnet.shh_subnet1.id]
+    }, var.eks_node_group)
   }
 
   enable_irsa = true
@@ -329,5 +323,17 @@ module "eks" {
 
   node_security_group_tags = {
     "karpenter.sh/discovery" = var.eks_cluster_name
+  }
+
+  # Allow UDP node-to-node traffic for svmc
+  node_security_group_additional_rules = {
+    udp_node_to_node = {
+      description = "UDP node-to-node traffic"
+      protocol    = "udp"
+      from_port   = 0
+      to_port     = 65535
+      type        = "ingress"
+      self        = true
+    }
   }
 }
