@@ -157,6 +157,14 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: controller-cluster-info
+  namespace: {{ .Release.Namespace }}
+data:
+  "api_endpoint": "https://api.{{ .Values.hostname }}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: primary-controller-lock
   namespace: {{ .Release.Namespace }}
   labels:
@@ -201,6 +209,10 @@ spec:
         - secretRef:
             name: controller-credentials
         env:
+        - name: ISOLATE_WORKER_CPU_REQUEST
+          value: {{ quote (default "15m" .Values.controller.isolate_worker_cpu_request) }}
+        - name: ISOLATE_WORKER_MIN_CPU_PER_NODE
+          value: {{ quote (default "1500m" .Values.controller.isolate_worker_min_cpu_per_node) }}
         - name: MIN_ISOLATE_WORKERS_REPLICAS
           value: {{ quote (default 4 .Values.controller.min_isolate_workers_replicas) }}
         - name: MAX_ISOLATE_WORKERS_REPLICAS
@@ -229,6 +241,8 @@ spec:
           value: svmcd.{{ .Release.Namespace }}.svc.cluster.local:7293
         - name: LSC_ENDPOINT
           value: http://lscached-serve.{{ .Release.Namespace }}.svc.cluster.local:4522
+        - name: OIDC_ISS
+          value: http://controller.{{ .Release.Namespace }}.svc.cluster.local:4000
         - name: KUBELET_TLS_CA
           valueFrom:
             configMapKeyRef:
@@ -252,10 +266,6 @@ spec:
         - name: HOSTMAP_SOURCE_default
           value: '{"hostname":"*","s3Endpoint":"http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000","s3Bucket":{{ quote .Values.blob.minio.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
         {{- else if .Values.blob.s3 }}
-        - name: AWS_ACCESS_KEY_ID
-          value: {{ .Values.blob.s3.access_key }}
-        - name: AWS_SECRET_ACCESS_KEY
-          value: {{ .Values.blob.s3.secret_key }}
         - name: HOSTMAP_SOURCE_default
           value: '{"hostname":"*","s3Bucket":{{ quote .Values.blob.s3.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
         {{- end }}

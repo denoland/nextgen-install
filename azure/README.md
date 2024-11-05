@@ -117,46 +117,9 @@ Note: this script is included for convenience at `helm/deps.sh`.
 
 # Install The Deno Cluster Helm Chart
 
-Update the values in the example `values.yaml` provided with the values provided
-in the Terraform output. They're highlighted in the example below.
-
-```yaml
-provider: azure
-region: westus # CHANGE ME
-hostname: mycluster.example.org # CHANGE ME
-
-# The certificate email will be associated with the TLS certificate provisioned
-# through Let's Encrypt.
-certificate_email: foo@example.org # CHANGE ME
-
-azure:
-  subscription_id: UUID # CHANGE ME
-  resource_group_name: my_resource_group # CHANGE ME
-  dns_zone: example.org # CHANGE ME
-  user_assigned_identity_client_id: UUID # CHANGE ME
-
-blob:
-  minio:
-    cache_storage_bucket: cache
-    code_storage_bucket: deployments
-    hostmap_storage_bucket: deployments
-
-# Uncomment the following block to send logs to an OTLP endpoint.
-# otlp:
-#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
-#   auth:
-#     authenticator: basicauth/otlp
-#     username: "103456"
-#     password: "ghc_xxx"
-
-controller:
-  serviceaccount_annotations: {}
-
-proxy:
-  serviceaccount_annotations: {}
-```
-
-Then, install the `deno-cluster` Helm chart.
+Terraform should have created a file called `values.yaml` in the working
+directory, make sure it exists before installing the chart with the following
+command:
 
 :warning: The Helm chart must be installed into the `default` namespace.
 

@@ -33,15 +33,15 @@ output "cache_storage_bucket" {
   value = module.aws_region.cache_storage_bucket
 }
 
-output "access_key_id" {
-  value = module.aws_region.access_key_id
-}
-
-output "secret_access_key" {
-  value     = module.aws_region.secret_access_key
-  sensitive = true
-}
-
 output "iam_serviceaccount_role_arn" {
   value = module.aws_region.iam_serviceaccount_role_arn
+}
+
+output "iam_lscache_serviceaccount_role_arn" {
+  value = module.aws_region.iam_s3_serviceaccount_role_arn
+}
+
+resource "local_file" "values_yaml" {
+    content  = module.aws_region.values_yaml
+    filename = "values.yaml"
 }
