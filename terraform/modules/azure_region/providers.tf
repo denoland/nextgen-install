@@ -1,3 +1,5 @@
+// Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
 terraform {
   required_providers {
     azurerm = {

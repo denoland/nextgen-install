@@ -1,22 +1,26 @@
 // Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
 
-resource "aws_iam_policy" "eks_service_account_policy" {
-  name = "eks-service-account-policy"
+resource "aws_iam_policy" "eks_s3_service_account_policy" {
+  name = "eks-s3-service-account-policy"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        # TODO: narrow down the permissions
-        Effect   = "Allow",
-        Action   = "eks:*",
-        Resource = "*"
+        Effect = "Allow",
+        Action = "s3:*",
+        Resource = [
+          aws_s3_bucket.lsc_storage.arn,
+          "${aws_s3_bucket.lsc_storage.arn}/*",
+          aws_s3_bucket.code_storage.arn,
+          "${aws_s3_bucket.code_storage.arn}/*"
+        ]
       }
     ]
   })
 }
 
-resource "aws_iam_role" "eks_service_account" {
-  name        = "eks-service-account-${local.short_uuid}"
+resource "aws_iam_role" "eks_lscached_service_account" {
+  name        = "eks-lscached-service-account-${local.short_uuid}"
   description = data.aws_eks_cluster_auth.this.id
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -29,7 +33,7 @@ resource "aws_iam_role" "eks_service_account" {
         }
         Condition = {
           StringEquals = {
-            "${trimprefix(module.eks.cluster_oidc_issuer_url, "https://")}:sub" : "system:serviceaccount:default:controller"
+            "${trimprefix(module.eks.cluster_oidc_issuer_url, "https://")}:sub" : "system:serviceaccount:default:lscached"
             "${trimprefix(module.eks.cluster_oidc_issuer_url, "https://")}:aud" : "sts.amazonaws.com"
           }
         }
@@ -38,12 +42,7 @@ resource "aws_iam_role" "eks_service_account" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "eks_service_account" {
-  role       = aws_iam_role.eks_service_account.name
-  policy_arn = aws_iam_policy.eks_service_account_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "eks_controller_s3_service_account" {
-  role       = aws_iam_role.eks_service_account.name
+resource "aws_iam_role_policy_attachment" "eks_s3_lscached_service_account" {
+  role       = aws_iam_role.eks_lscached_service_account.name
   policy_arn = aws_iam_policy.eks_s3_service_account_policy.arn
 }

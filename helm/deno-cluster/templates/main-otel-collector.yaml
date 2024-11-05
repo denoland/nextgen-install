@@ -16,21 +16,27 @@ spec:
     exporters:
       nop: {}
       {{- if .Values.otlp }}
-      otlphttp:
+      otlp:
         endpoint: "{{ .Values.otlp.endpoint }}"
-        {{- if .Values.otlp.auth }}
+        tls:
+          insecure: true
+      {{- end }}
+      {{- if .Values.otlphttp }}
+      otlphttp:
+        endpoint: "{{ .Values.otlphttp.endpoint }}"
+        {{- if .Values.otlphttp.auth }}
         auth:
-          authenticator: {{ .Values.otlp.auth.authenticator }}
+          authenticator: {{ .Values.otlphttp.auth.authenticator }}
         {{- end }}
       {{- end }}
     extensions:
       health_check: {}
       zpages: {}
-      {{- if and (.Values.otlp) (.Values.otlp.auth) (eq .Values.otlp.auth.authenticator "basicauth/otlp") }}
+      {{- if and (.Values.otlphttp) (.Values.otlphttp.auth) (eq .Values.otlphttp.auth.authenticator "basicauth/otlp") }}
       basicauth/otlp:
         client_auth:
-          username: '{{ .Values.otlp.auth.username }}'
-          password: '{{ .Values.otlp.auth.password }}'
+          username: '{{ .Values.otlphttp.auth.username }}'
+          password: '{{ .Values.otlphttp.auth.password }}'
       {{- end }}
     processors:
       batch: {}
@@ -54,22 +60,19 @@ spec:
         - basicauth/otlp
         {{- end }}
       pipelines:
+        {{- $exporters := list "nop" }}
+        {{- if .Values.otlp }}
+          {{- $exporters = append $exporters "otlp" }}
+        {{- end }}
+        {{- if .Values.otlphttp }}
+          {{- $exporters = append $exporters "otlphttp" }}
+        {{- end }}
         logs:
-          exporters:
-            {{- if .Values.otlp }}
-            - otlphttp
-            {{- else }}
-            - nop
-            {{- end }}
+          exporters: {{ toJson $exporters }}
           processors: [batch, resource]
           receivers: [otlp]
         traces:
-          exporters:
-            {{- if .Values.otlp }}
-            - otlphttp
-            {{- else }}
-            - nop
-            {{- end }}
+          exporters: {{ toJson $exporters }}
           processors: [batch, resource]
           receivers: [otlp]
   image: otel/opentelemetry-collector-contrib:0.105.0

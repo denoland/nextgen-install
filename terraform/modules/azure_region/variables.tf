@@ -1,3 +1,5 @@
+// Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
 
 variable "name" {
   description = "Name for the resource group and all resources within it. Must be unique within the subscription."

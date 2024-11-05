@@ -8,7 +8,7 @@
 #
 {{ if ne .Values.provider "aws" }}
 apiVersion: apps/v1
-kind: ReplicaSet
+kind: StatefulSet
 metadata:
   name: minio
   namespace: {{ .Release.Namespace }}
@@ -52,14 +52,26 @@ spec:
           name: api
         volumeMounts:
         - mountPath: /data
-          name: localvolume # Corresponds to the `spec.volumes` Persistent Volume
+          name: datavolume # Corresponds to the `spec.volumes` Persistent Volume
       # nodeSelector:
       #   kubernetes.io/hostname: kubealpha.local # Specify a node label associated to the Worker Node on which you want to deploy the pod.
+{{- if ne .Values.provider "azure" }}
       volumes:
-      - name: localvolume
+      - name: datavolume
         hostPath: # MinIO generally recommends using locally-attached volumes
           path: /mnt/disk1/data # Specify a path to a local drive or volume on the Kubernetes worker node
           type: DirectoryOrCreate # The path to the last directory must exist
+{{- else }}
+  volumeClaimTemplates:
+  - metadata:
+      name: datavolume
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: managed-csi
+      resources:
+        requests:
+          storage: 100Gi
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
