@@ -13,6 +13,7 @@ interface DeployArgs {
   env?: Record<string, string>;
   s3Bucket?: string;
   azStorageAccount?: string;
+  skipOptimization?: boolean;
 }
 
 interface UserConfig {
@@ -203,18 +204,22 @@ async function deploy(args: DeployArgs) {
     const layeredCodeUrl = `layers://${layers}`;
 
     // Make a HTTP request to the cluster to trigger deployment
-    console.log("Optimizing deployment...");
-    const optimizeCommand = fetch(`https://${args.domain}`, {
-      method: "GET",
-      headers: {
-        "x-deno-deployment-id": layeredCodeUrl,
-      },
-    });
-    const optimizeResponse = await optimizeCommand;
-    if (!optimizeResponse.ok) {
-      throw new Error(
-        `Failed to optimize deployment: ${optimizeResponse.status} ${optimizeResponse.statusText}`,
-      );
+    if (!(args.skipOptimization ?? false)) {
+      console.log("Optimizing deployment...");
+      const optimizeCommand = fetch(`https://${args.domain}`, {
+        method: "GET",
+        headers: {
+          "x-deno-deployment-id": layeredCodeUrl,
+        },
+      });
+      const optimizeResponse = await optimizeCommand;
+      if (!optimizeResponse.ok) {
+        throw new Error(
+          `Failed to optimize deployment: ${optimizeResponse.status} ${optimizeResponse.statusText}`,
+        );
+      }
+    } else {
+      console.log("Skipping optimization step...");
     }
 
     // Update hostmap
@@ -309,6 +314,9 @@ function usage() {
   console.log(
     "  --az-storage-account <acc>     Azure storage account (required if using Azure)",
   );
+  console.log(
+    "  --skip-optimize                Skip the optimization step",
+  )
   Deno.exit(1);
 }
 
@@ -333,6 +341,7 @@ if (import.meta.main) {
       s: "source-dir",
       e: "entry-point",
     },
+    boolean: ["skip-optimize"],
   });
 
   if (args._[0] === "deploy") {
@@ -350,6 +359,7 @@ if (import.meta.main) {
       })),
       s3Bucket: args["s3-bucket"],
       azStorageAccount: args["az-storage-account"],
+      skipOptimization: args["skip-optimize"],
     });
   } else if (args._[0] === "help" || args.help) {
     usage();
