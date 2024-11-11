@@ -14,7 +14,7 @@ resource "kubernetes_service" "nlb_proxy_service" {
       "service.beta.kubernetes.io/aws-load-balancer-ssl-ports"              = "443"
       "service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy" = "ELBSecurityPolicy-TLS13-1-2-2021-06"
       "service.beta.kubernetes.io/aws-load-balancer-name"                   = "${module.eks.cluster_name}-nlb"
-      "service.beta.kubernetes.io/aws-load-balancer-ssl-cert"               = aws_acm_certificate_validation.cert_validation.certificate_arn
+      "service.beta.kubernetes.io/aws-load-balancer-ssl-cert"               = aws_acm_certificate.cert.arn
       "service.beta.kubernetes.io/aws-load-balancer-backend-protocol"       = "tcp"
       "service.beta.kubernetes.io/aws-load-balancer-alpn-policy"            = "HTTP2Preferred"
     }

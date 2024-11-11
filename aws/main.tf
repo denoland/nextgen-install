@@ -41,6 +41,14 @@ output "iam_lscache_serviceaccount_role_arn" {
   value = module.aws_region.iam_s3_serviceaccount_role_arn
 }
 
+output "acm_certificate_arn" {
+  value = module.aws_region.nlb_cert_arn
+}
+
+output "hosted_zone_nameservers" {
+  value = module.aws_region.hosted_zone_nameservers
+}
+
 resource "local_file" "values_yaml" {
     content  = module.aws_region.values_yaml
     filename = "values.yaml"

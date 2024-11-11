@@ -43,3 +43,8 @@ variable "eks_node_group" {
     disk_size_gb   = 20
   }
 }
+
+variable "wait_for_acm_validation" {
+  type    = bool
+  default = false
+}
