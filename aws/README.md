@@ -18,19 +18,14 @@ You'll need designate domain name like
 
 ```terraform
 locals {
-  domain_name = "mycluster.deno-cluster.net"  # <— The DNS zone that terraform will create in AWS.
-  eks_cluster_name = "deno-cluster-01"        # <— The name of the EKS cluster.
-  eks_cluster_region   = "us-west-2"          # <— The AWS region to deploy to.
+  domain_name          = "mycluster.deno-cluster.net" # <— The DNS zone that terraform will create in AWS.
+  eks_cluster_name     = "deno-cluster-01"            # <— The name of the EKS cluster.
+  eks_cluster_region   = "us-west-2"                  # <— The AWS region to deploy to.
 }
 ```
 
 Finally, run `terraform init` to initialize the Terraform configuration and run
 `terraform apply` to create the resources.
-
-:warning: `terraform apply` will not complete until a certificate for the domain is
-issued by AWS and validated. Certificate validation requires DNS delegation to
-AWS, which is covered in the next section. Please proceed to [DNS Configuration](#dns-configuration)
-while `terraform apply` is running.
 
 Take note of the outputs of the plan, you'll need these values later to
 configure your Deno Cluster installation.
@@ -42,18 +37,20 @@ domain name (e.g. `mycluster.deno-cluster.net`) to AWS. Use the following comman
 to get the NS records for the DNS zone (set `DOMAIN_NAME` to your domain name):
 
 ```bash
-export DENO_CLUSTER_DOMAIN_NAME=mycluster.deno-cluster.net
-aws route53 list-hosted-zones --query "HostedZones[?Name=='$DENO_CLUSTER_DOMAIN_NAME.'].Id" --output text | xargs -I {} aws route53 get-hosted-zone --id {} --query "DelegationSet.NameServers" --output json | jq -r '.[]'
-
+terraform output
 ```
 
 The name servers will look similar to this:
 
 ```
-ns-1.awsdns-05.org
-ns-2.awsdns-50.net
-ns-3.awsdns-22.com
-ns-4.awsdns-08.co.uk
+# ...
+hosted_zone_nameservers = tolist([
+  "ns-1441.awsdns-52.org",
+  "ns-1909.awsdns-46.co.uk",
+  "ns-429.awsdns-53.com",
+  "ns-592.awsdns-10.net",
+])
+# ...
 ```
 
 To delegate your cluster domain name to AWS DNS, you would add the following
@@ -65,6 +62,17 @@ mycluster.deno-cluster.net.  IN  NS  ns-2.awsdns-50.net.
 mycluster.deno-cluster.net.  IN  NS  ns-3.awsdns-22.com.
 mycluster.deno-cluster.net.  IN  NS  ns-4.awsdns-08.co.uk.
 ```
+
+> [!NOTE]
+> Once the Terraform plan has run to completion, the AWS will validate the
+> certificate through the DNS records that were created by Terraform. You don't
+> have to wait for it to be validated to continue, but you will need to make
+> sure the validation completed before making a deployment. To do so, run the
+> following command:
+>
+> ```bash
+> aws acm wait certificate-validated --certificate-arn <arn>
+> ```
 
 ## Connect To The Cluster
 

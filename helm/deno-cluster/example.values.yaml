@@ -31,9 +31,19 @@ controller:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::329599618741:role/...
   # min_isolate_workers_replicas: 10
   # max_isolate_workers_replicas: 100
+  # isolate_worker_cpu_request: 15m
+  # isolate_worker_min_cpu_per_node: 1500m
   env:
     - name: ISOLATE_WORKER_CONTAINER_IMAGE
       value: docker.io/denoland/cluster-isolate-worker:v0.0.3
+    # - name: ISOLATE_TARGET_FREE_POOL_RATIO
+    #   value: "0.5"
+    # - name: NODE_METRICS_SELECTOR
+    #   value: "karpenter.sh/provisioner-name=default"
+    # - name: CLUSTER_CPU_PCT_TARGET
+    #   value: "0.6"
+    # - name: CLUSTER_MEMORY_PCT_TARGET
+    #   value: "0.6"
 
 proxy:
   image: docker.io/denoland/cluster-proxy:v0.0.3
