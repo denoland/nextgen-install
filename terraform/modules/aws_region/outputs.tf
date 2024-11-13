@@ -1,7 +1,7 @@
 // Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
 
 output "nlb_cert_arn" {
-  value = aws_acm_certificate_validation.cert_validation.certificate_arn
+  value = aws_acm_certificate.cert.arn
 }
 
 output "iam_serviceaccount_role_arn" {
@@ -18,6 +18,10 @@ output "code_storage_bucket" {
 
 output "cache_storage_bucket" {
   value = aws_s3_bucket.lsc_storage.bucket
+}
+
+output "hosted_zone_nameservers" {
+  value = aws_route53_zone.domain_name.name_servers
 }
 
 output "values_yaml" {
