@@ -44,7 +44,7 @@ spec:
               {{- end }}
       priorityClassName: deno-system-high-priority
       containers:
-        - image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-proxy:{{ default .Chart.AppVersion (.Values.proxy).version }}
+        - image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-proxy:{{ default .Chart.AppVersion (.Values.proxy).version }}
           imagePullPolicy: IfNotPresent
           name: proxy
           ports:
@@ -70,6 +70,10 @@ spec:
               value: http://controller.{{ .Release.Namespace }}.svc.cluster.local:4000
             - name: CLUSTER_REGION
               value: {{ .Values.region }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://main-collector.{{ .Release.Namespace }}.svc.cluster.local:4317
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=deno-proxy"
             {{- range .Values.proxy.env }}
             - name: {{ .name }}
               {{- /* Must convert to yaml, indent and trim to support multiline strings in values */}}

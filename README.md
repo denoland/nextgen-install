@@ -19,6 +19,8 @@ security.
 - **Built-in Observability:** Get integrated logging, metrics, and tracing
   through OpenTelemetry.
 
+Follow along in the [release notes](./RELEASE_NOTES.md).
+
 ## Product Overview
 
 Deno Deploy NextGen is built for teams seeking flexibility in running Deno and

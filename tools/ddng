@@ -121,6 +121,7 @@ async function deploy(args: DeployArgs) {
       ],
       stdout: "inherit",
       stderr: "inherit",
+      cwd: join(tempDir, "pkg", "src"),
     });
     const { success: cacheSuccess } = await cacheCommand
       .output();

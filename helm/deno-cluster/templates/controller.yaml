@@ -218,7 +218,7 @@ spec:
         - name: MAX_ISOLATE_WORKERS_REPLICAS
           value: {{ quote (default 10 .Values.controller.max_isolate_workers_replicas) }}
         - name: ISOLATE_WORKER_CONTAINER_IMAGE
-          value: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-isolate-worker:{{ default .Chart.AppVersion (.Values.controller).isolate_worker_version }}
+          value: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-isolate-worker:{{ default .Chart.AppVersion (.Values.controller).isolate_worker_version }}
         - name: CONTROLLER_POD_NAME
           valueFrom:
             fieldRef:
@@ -254,6 +254,10 @@ spec:
           value: {{ .Values.provider }}
         - name: CLUSTER_REGION
           value: {{ .Values.region }}
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://main-collector.{{ .Release.Namespace }}.svc.cluster.local:4317
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=deno-controller"
         {{- if .Values.blob.minio }}
         - name: S3_ENDPOINT
           value: http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000
@@ -274,7 +278,7 @@ spec:
           {{- /* Must convert to yaml, indent and trim to support multiline strings in values */}}
           value: {{ .value | toYaml | indent 10 | trim }}
         {{- end }}
-        image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-controller:{{ default .Chart.AppVersion (.Values.controller).version }}
+        image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-controller:{{ default .Chart.AppVersion (.Values.controller).version }}
         imagePullPolicy: IfNotPresent
         name: controller
         ports:
