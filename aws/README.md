@@ -30,6 +30,11 @@ Finally, run `terraform init` to initialize the Terraform configuration and run
 Take note of the outputs of the plan, you'll need these values later to
 configure your Deno Cluster installation.
 
+The plan creates a file called `values.yaml` with the values necessary for the
+installation of the Helm chart later. If you're running in CI and can't access
+that file, the values are included in the plan's output and can be copied from
+there.
+
 ## DNS Configuration
 
 In your domain registrar or DNS provider, delegate the DNS zone for your cluster

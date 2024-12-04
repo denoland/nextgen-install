@@ -19,7 +19,7 @@ spec:
     spec:
       terminationGracePeriodSeconds: 10
       containers:
-      - image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
+      - image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
         imagePullPolicy: IfNotPresent
         name: svmcd
         terminationMessagePath: /dev/termination-log

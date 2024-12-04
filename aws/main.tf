@@ -49,6 +49,10 @@ output "hosted_zone_nameservers" {
   value = module.aws_region.hosted_zone_nameservers
 }
 
+output "values_yaml" {
+  value = module.aws_region.values_yaml
+}
+
 resource "local_file" "values_yaml" {
     content  = module.aws_region.values_yaml
     filename = "values.yaml"

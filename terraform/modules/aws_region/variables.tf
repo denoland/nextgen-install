@@ -31,7 +31,7 @@ variable "eks_node_group" {
     min_size       = number
     max_size       = number
     desired_size   = number
-    disk_size_gb   = number
+    disk_size      = number
   })
   default = {
     ami_type       = "AL2023_x86_64_STANDARD"
@@ -40,7 +40,7 @@ variable "eks_node_group" {
     min_size       = 1
     max_size       = 1
     desired_size   = 1
-    disk_size_gb   = 20
+    disk_size      = 60
   }
 }
 

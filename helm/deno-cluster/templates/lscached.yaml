@@ -80,7 +80,7 @@ spec:
           value: default/
         - name: LSC_WRITE_BUFFER_SIZE_BYTES
           value: "536870912"
-        image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
+        image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
         imagePullPolicy: IfNotPresent
         name: lscached-serve
         ports:
@@ -151,7 +151,7 @@ spec:
             {{- end }}
             - name: LSC_S3_PREFIX
               value: default/
-            image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
+            image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
             imagePullPolicy: IfNotPresent
             name: lscached-dwb
           restartPolicy: Never
@@ -207,7 +207,7 @@ spec:
             {{- end }}
             - name: LSC_S3_PREFIX
               value: default/
-            image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
+            image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
             imagePullPolicy: IfNotPresent
             name: lscached-gc
           restartPolicy: Never
@@ -265,7 +265,7 @@ spec:
               value: default/
             - name: LSC_MAX_GROUP_SIZE
               value: "8589934592"
-            image: {{ default "docker.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
+            image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
             imagePullPolicy: IfNotPresent
             name: lscached-merge
           restartPolicy: Never

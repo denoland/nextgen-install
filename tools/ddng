@@ -14,12 +14,22 @@ interface DeployArgs {
   s3Bucket?: string;
   azStorageAccount?: string;
   skipOptimization?: boolean;
+  otelServiceName?: string;
+  otelServiceVersion?: string;
+  otelResourceAttributes?: Record<string, string>;
 }
 
 interface UserConfig {
   env?: Record<string, string>;
   entrypoint?: string;
   args?: string[];
+  otel?: OtelConfig;
+}
+
+interface OtelConfig {
+  serviceName?: string;
+  serviceVersion?: string;
+  resourceAttributes?: Record<string, string>;
 }
 
 async function deploy(args: DeployArgs) {
@@ -98,6 +108,7 @@ async function deploy(args: DeployArgs) {
     console.log(`  entry point: ${entryPoint}`);
 
     console.log("Building package...");
+
     const config: UserConfig = { entrypoint: entryPoint };
     if (isNextApp) {
       config.args = ["start"];
@@ -105,6 +116,22 @@ async function deploy(args: DeployArgs) {
     if (args.env) {
       config.env = args.env;
     }
+    if (
+      args.otelServiceName || args.otelServiceVersion ||
+      args.otelResourceAttributes
+    ) {
+      config.otel = {};
+      if (args.otelServiceName) {
+        config.otel.serviceName = args.otelServiceName;
+      }
+      if (args.otelServiceVersion) {
+        config.otel.serviceVersion = args.otelServiceVersion;
+      }
+      if (args.otelResourceAttributes) {
+        config.otel.resourceAttributes = args.otelResourceAttributes;
+      }
+    }
+
     await Deno.writeTextFile(
       join(tempDir, "pkg", "config.json"),
       JSON.stringify(config),
@@ -121,6 +148,7 @@ async function deploy(args: DeployArgs) {
       ],
       stdout: "inherit",
       stderr: "inherit",
+      cwd: join(tempDir, "pkg", "src"),
     });
     const { success: cacheSuccess } = await cacheCommand
       .output();
@@ -131,7 +159,14 @@ async function deploy(args: DeployArgs) {
 
     // Create tar archive
     const tarCommand = new Deno.Command("tar", {
-      args: ["cf", join(tempDir, "pkg.tar"), "-C", join(tempDir, "pkg"), "."],
+      args: [
+        "cf",
+        join(tempDir, "pkg.tar"),
+        "--strip-components=1",
+        "-C",
+        join(tempDir, "pkg"),
+        ".",
+      ],
       stdout: "inherit",
       stderr: "inherit",
     });
@@ -283,6 +318,24 @@ async function deploy(args: DeployArgs) {
       throw new Error("No storage provider specified");
     }
 
+    let purgeSuccess = false;
+    try {
+      const res = await fetch(
+        `https://${args.domain}/.deno/hostmap_cache/${args.domain}`,
+        {
+          method: "DELETE",
+        },
+      );
+      purgeSuccess = res.ok;
+    } catch {
+      purgeSuccess = false;
+    }
+    if (!purgeSuccess) {
+      console.error(
+        "Failed to purge hostmap cache. It might take a while (around a minute) for the new new deployment to become visible.",
+      );
+    }
+
     console.log(`Deployed to https://${args.domain}`);
   } finally {
     // Clean up temp directory
@@ -297,26 +350,35 @@ function usage() {
   console.log();
   console.log("Options:");
   console.log(
-    "  -d,--domain <domain>           Deployment domain (e.g., hello.mycluster.deno-cluster.net)",
+    "  -d,--domain <domain>             Deployment domain (e.g., hello.mycluster.deno-cluster.net)",
   );
   console.log(
-    "  -s,--source-dir <dir>          Source directory (default: current directory)",
+    "  -s,--source-dir <dir>            Source directory (default: current directory)",
   );
   console.log(
-    "  -e,--entry-point <file>        Specify entry point (default: auto detect)",
+    "  -e,--entry-point <file>          Specify entry point (default: auto detect)",
   );
   console.log(
-    "  --env <KEY=VALUE>              Set environment variables using KEY=VALUE format, can be specified multiple times",
+    "  --env <KEY=VALUE>                Set environment variables using KEY=VALUE format, can be specified multiple times",
   );
   console.log(
-    "  --s3-bucket <bucket>           Specify S3 bucket (required if using AWS)",
+    "  --otel-service-name <name>       Specify OpenTelemetry service name",
   );
   console.log(
-    "  --az-storage-account <acc>     Azure storage account (required if using Azure)",
+    "  --otel-service-version <ver>     Specify OpenTelemetry service version",
   );
   console.log(
-    "  --skip-optimize                Skip the optimization step",
-  )
+    "  --otel-resource-attribute <K=V>  Specify OpenTelemetry resource attributes in KEY=VALUE format, can be specified multiple times",
+  );
+  console.log(
+    "  --s3-bucket <bucket>             Specify S3 bucket (required if using AWS)",
+  );
+  console.log(
+    "  --az-storage-account <acc>       Azure storage account (required if using Azure)",
+  );
+  console.log(
+    "  --skip-optimize                  Skip the optimization step",
+  );
   Deno.exit(1);
 }
 
@@ -334,8 +396,11 @@ if (import.meta.main) {
       "env",
       "s3-bucket",
       "az-storage-account",
+      "otel-service-name",
+      "otel-service-version",
+      "otel-resource-attribute",
     ],
-    collect: ["env"],
+    collect: ["env", "otel-resource-attribute"],
     alias: {
       d: "domain",
       s: "source-dir",
@@ -349,17 +414,33 @@ if (import.meta.main) {
       domain: args.domain,
       sourceDir: args["source-dir"],
       entryPoint: args["entry-point"],
-      env: Object.fromEntries(args.env.map((e: string) => {
-        const eqIndex = e.indexOf("=");
-        if (eqIndex === -1) {
-          console.error(`Invalid environment variable: ${e}`);
-          Deno.exit(1);
-        }
-        return [e.slice(0, eqIndex), e.slice(eqIndex + 1)];
-      })),
+      env: args.env.length > 0
+        ? Object.fromEntries(args.env.map((e: string) => {
+          const eqIndex = e.indexOf("=");
+          if (eqIndex === -1) {
+            console.error(`Invalid environment variable: ${e}`);
+            Deno.exit(1);
+          }
+          return [e.slice(0, eqIndex), e.slice(eqIndex + 1)];
+        }))
+        : undefined,
       s3Bucket: args["s3-bucket"],
       azStorageAccount: args["az-storage-account"],
       skipOptimization: args["skip-optimize"],
+      otelServiceName: args["otel-service-name"],
+      otelServiceVersion: args["otel-service-version"],
+      otelResourceAttributes: args["otel-resource-attribute"].length > 0
+        ? Object.fromEntries(
+          args["otel-resource-attribute"].map((attr: string) => {
+            const eqIndex = attr.indexOf("=");
+            if (eqIndex === -1) {
+              console.error(`Invalid resource attribute: ${attr}`);
+              Deno.exit(1);
+            }
+            return [attr.slice(0, eqIndex), attr.slice(eqIndex + 1)];
+          }),
+        )
+        : undefined,
     });
   } else if (args._[0] === "help" || args.help) {
     usage();
