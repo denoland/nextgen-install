@@ -38,9 +38,13 @@ For detailed installation instructions based on your cloud provider, refer to
 the following files:
 
 - [AWS Installation Instructions](aws/README.md)
-
 - [Azure Installation Instructions](azure/README.md)
 
 These guides will help you set up Deno Deploy NextGen on your preferred cloud
 and walk you through the process of deploying your own serverless
 infrastructure.
+
+## Documentation
+
+- [Release notes](./RELEASE_NOTES.md)
+- [Manual](./MANUAL.md)

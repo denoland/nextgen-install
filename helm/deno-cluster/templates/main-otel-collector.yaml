@@ -6,8 +6,6 @@ metadata:
   name: main
   namespace: {{ .Release.Namespace }}
 spec:
-  args:
-    feature-gates: -component.UseLocalHostAsDefaultHost,-confmap.strictlyTypedInput
   autoscaler:
     maxReplicas: 10
     minReplicas: 1
@@ -15,6 +13,8 @@ spec:
   config:
     exporters:
       nop: {}
+      debug:
+        verbosity: normal
       {{- if .Values.otlp }}
       otlp:
         endpoint: "{{ .Values.otlp.endpoint }}"
@@ -29,8 +29,12 @@ spec:
           authenticator: {{ .Values.otlphttp.auth.authenticator }}
         {{- end }}
       {{- end }}
+      {{- if .Values.otel_clickhouse }}
+      clickhouse: {{ .Values.otel_clickhouse | toJson }}
+      {{- end }}
     extensions:
-      health_check: {}
+      health_check: 
+        endpoint: 0.0.0.0:13133
       zpages: {}
       {{- if and (.Values.otlphttp) (.Values.otlphttp.auth) (eq .Values.otlphttp.auth.authenticator "basicauth/otlp") }}
       basicauth/otlp:
@@ -40,6 +44,13 @@ spec:
       {{- end }}
     processors:
       batch: {}
+      transform/metric_namespace:
+        metric_statements:
+          - context: metric
+            conditions:
+              - resource.attributes["service.namespace"] != ""
+            statements:
+              - set(name, Concat([resource.attributes["service.namespace"], name], "_"))
       resource:
         attributes:
         - action: upsert
@@ -56,7 +67,7 @@ spec:
       extensions:
         - health_check
         - zpages
-        {{- if and (.Values.otlp) (.Values.otlp.auth) (eq .Values.otlp.auth.authenticator "basicauth/otlp") }}
+        {{- if and (.Values.otlphttp) (.Values.otlphttp.auth) (eq .Values.otlphttp.auth.authenticator "basicauth/otlp") }}
         - basicauth/otlp
         {{- end }}
       pipelines:
@@ -67,6 +78,9 @@ spec:
         {{- if .Values.otlphttp }}
           {{- $exporters = append $exporters "otlphttp" }}
         {{- end }}
+        {{- if .Values.otel_clickhouse }}
+          {{- $exporters = append $exporters "clickhouse" }}
+        {{- end }}
         logs:
           exporters: {{ toJson $exporters }}
           processors: [batch, resource]
@@ -75,7 +89,11 @@ spec:
           exporters: {{ toJson $exporters }}
           processors: [batch, resource]
           receivers: [otlp]
-  image: otel/opentelemetry-collector-contrib:0.105.0
+        metrics:
+          exporters: {{ toJson $exporters }}
+          processors: [batch, resource, transform/metric_namespace]
+          receivers: [otlp]
+  image: otel/opentelemetry-collector-contrib:0.114.0
   mode: deployment
   ports:
   - name: otlpgrpc
