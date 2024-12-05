@@ -45,10 +45,10 @@ output "deno_cluster_user_assigned_identity_client_id" {
 }
 
 output "values_yaml" {
-  value = module.aws_region.values_yaml
+  value = module.azure_region.values_yaml
 }
 
 resource "local_file" "values_yaml" {
-    content  = module.azure_region.values_yaml
-    filename = "values.yaml"
+  content  = module.azure_region.values_yaml
+  filename = "values.yaml"
 }
