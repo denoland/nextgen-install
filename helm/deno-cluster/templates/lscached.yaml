@@ -228,7 +228,7 @@ spec:
     metadata:
       name: lscached-merge
     spec:
-      activeDeadlineSeconds: 299
+      activeDeadlineSeconds: 3599
       template:
         metadata:
           name: lscached-merge
