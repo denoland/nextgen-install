@@ -1,5 +1,14 @@
 # Releases
 
+### 0.0.19 / 2024.12.11
+
+- Resolved an issue where additional workers for a deployment would fail to
+  start when the controller had been restarted or failed over between the
+  creation of the initial worker and the subsequent scale-up event.
+- Fixed typos in the Terraform script for Azure.
+- Added native support for ARM64 architecture, expanding container image
+  compatibility beyond x86_64 to include linux/arm64 platforms.
+
 ### 0.0.18 / 2024.12.04
 
 - Resolved an issue where all open connections between the proxy and worker were
