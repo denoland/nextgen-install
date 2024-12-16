@@ -1,5 +1,10 @@
 # Releases
 
+### 0.0.21 / 2024.12.16
+
+- Fixed a regression introduced in v0.0.20 where the controller would sometimes
+  mark workers that had successfully booted as failed.
+
 ### 0.0.20 / 2024.12.16
 
 - Resolved an issue where the controller would wait indefinitely for a worker
