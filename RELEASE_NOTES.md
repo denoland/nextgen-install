@@ -1,5 +1,14 @@
 # Releases
 
+### 0.0.20 / 2024.12.16
+
+- Resolved an issue where the controller would wait indefinitely for a worker
+  that failed to start. The controller now marks a worker as failed if it does
+  not start within 60 seconds.
+- Failures during startup and uncaught exceptions are now logged through the
+  OpenTelemetry pipeline as `boot_failure` and `uncaught_exception` events,
+  respectively.
+
 ### 0.0.19 / 2024.12.11
 
 - Resolved an issue where additional workers for a deployment would fail to
