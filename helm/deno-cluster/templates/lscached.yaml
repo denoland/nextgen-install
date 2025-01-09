@@ -100,7 +100,7 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - hostPath:
-          path: /mnt/lscache
+          path: /mnt/lscache-{{ .Release.Namespace }}
           type: DirectoryOrCreate
         name: cache
 ---
