@@ -1,5 +1,19 @@
 # Releases
 
+### 0.0.22 / 2025.01.08
+
+- All deployments now use an extra layer of isolation, based on Google's gVisor,
+  for additional security.
+- Telemetry from deployments that use the `@opentelemetry/api` NPM package is
+  now automatically exported via the OpenTelemetry pipeline.
+- A new communication protocol between proxies and workers was implemented to
+  improve stability when handling large HTTP requests or sending large HTTP
+  responses.
+- The Helm chart now allows for multiple deno-cluster installations in different
+  namespaces within the same cluster.
+- Different controller replicas are now spread out across multiple nodes for
+  improved fault tolerance, by means of a pod anti-affinity rule.
+
 ### 0.0.21 / 2024.12.16
 
 - Fixed a regression introduced in v0.0.20 where the controller would sometimes
