@@ -1,9 +1,0 @@
-Welcome to Deno Deploy Next Gen! 
-
-To get started, run the following commands:
-
-export CLUSTER_URL=$(kubectl --namespace {{ .Release.Namespace }} get cm controller-cluster-info -o jsonpath="{.data.cluster_setup_url}")
-echo "Open this URL: $CLUSTER_URL"
-open $CLUSTER_URL
-
-These will register and open the Deno Deploy Next Gen cluster in your browser.

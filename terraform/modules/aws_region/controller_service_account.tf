@@ -1,7 +1,7 @@
 // Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
 
 resource "aws_iam_policy" "eks_service_account_policy" {
-  name = "eks-service-account-policy"
+  name = "eks-service-account-policy-${local.short_uuid}"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [

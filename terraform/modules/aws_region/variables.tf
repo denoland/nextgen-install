@@ -4,6 +4,11 @@ variable "eks_cluster_name" {
   type = string
 }
 
+variable "create_eks_policies" {
+  type    = bool
+  default = true
+}
+
 variable "domain_name" {
   type = string
 }
@@ -47,4 +52,21 @@ variable "eks_node_group" {
 variable "wait_for_acm_validation" {
   type    = bool
   default = false
+}
+
+variable "enable_loadbalancer_tls_termination" {
+  type        = bool
+  default     = true
+  description = "Terminate TLS at the AWS Network Load Balancer"
+}
+
+variable "create_code_storage_bucket" {
+  type        = bool
+  default     = true
+  description = "Create an S3 bucket for code storage"
+}
+
+variable "code_storage_bucket" {
+  type    = string
+  default = ""
 }

@@ -29,6 +29,14 @@ spec:
         app: proxy
     spec:
       affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: proxy
+              topologyKey: "kubernetes.io/hostname"
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
@@ -62,6 +70,18 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: K8S_NAMESPACE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: OIDC_ISS
               value: http://controller.{{ .Release.Namespace }}.svc.cluster.local:4000
             - name: SVMC_ENDPOINT
@@ -70,10 +90,31 @@ spec:
               value: http://controller.{{ .Release.Namespace }}.svc.cluster.local:4000
             - name: CLUSTER_REGION
               value: {{ .Values.region }}
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://main-collector.{{ .Release.Namespace }}.svc.cluster.local:4317
+            - name: CLUSTER_HOSTNAME
+              value: {{ .Values.hostname }}
+            - name: CLUSTER_NAME
+              value: {{ .Values.cluster_name }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=deno-proxy,service.namespace=deno_cluster"
+            - name: PROXY_RESPONSE_CACHE_ENABLED
+              value: "1"
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            {{- if .Values.blob.minio }}
+            - name: S3_ENDPOINT
+              value: http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              value: minioadmin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: minioadmin
+            - name: APPCONFIG_BUCKET
+              value: {{ .Values.blob.minio.code_storage_bucket }}
+            {{- else if .Values.blob.s3 }}
+            - name: APPCONFIG_BUCKET
+              value: {{ .Values.blob.s3.code_storage_bucket }}
+            {{- end }}
             {{- range .Values.proxy.env }}
             - name: {{ .name }}
               {{- /* Must convert to yaml, indent and trim to support multiline strings in values */}}
@@ -116,14 +157,20 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   ports:
-  - name: service-port
-    port: {{ default 443 (.Values.proxy).service_port }}
+  - name: https-service-port
+    port: {{ default 443 (.Values.proxy).https_service_port }}
     protocol: TCP
     targetPort: 8443
-  - name: http-redirect-port
-    port: {{ default 80 (.Values.proxy).http_redirect_port }}
+  {{- if (.Values.proxy).http_service_port }}
+  - name: http-service-port
+    port: {{ (.Values.proxy).http_service_port }}
     protocol: TCP
     targetPort: 8080
+  {{- end }}
+  - name: http-redirect-port
+    port: {{ default 81 (.Values.proxy).http_redirect_port }}
+    protocol: TCP
+    targetPort: 8081
   selector:
     app: proxy
   type: LoadBalancer
@@ -165,3 +212,12 @@ subjects:
   - kind: ServiceAccount
     name: proxy
     namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth
+  namespace: {{ .Release.Namespace }}
+data:
+  allowBypass: {{ quote (default false ((default dict .Values.auth).allow_bypass)) }}
+  accounts.yaml: | {{ .Values.auth.accounts | toYaml | nindent 4 }}

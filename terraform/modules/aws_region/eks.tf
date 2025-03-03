@@ -284,21 +284,21 @@ module "eks" {
   cluster_name    = var.eks_cluster_name
   cluster_version = "1.30"
 
-  authentication_mode = "API_AND_CONFIG_MAP"
+  authentication_mode        = "API_AND_CONFIG_MAP"
+  create_cni_ipv6_iam_policy = var.create_eks_policies
 
 
   enable_cluster_creator_admin_permissions = var.enable_cluster_creator_admin_permissions
 
   cluster_ip_family = "ipv6"
 
-  create_cni_ipv6_iam_policy = true
-
   cluster_endpoint_public_access = true
 
   cluster_addons = {
-    coredns    = {}
-    kube-proxy = {}
-    vpc-cni    = {}
+    aws-ebs-csi-driver = {}
+    coredns            = {}
+    kube-proxy         = {}
+    vpc-cni            = {}
   }
 
   vpc_id     = aws_vpc.shh_vpc.id
@@ -336,4 +336,9 @@ module "eks" {
       self        = true
     }
   }
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi_policy_attachment" {
+  role       = module.eks.eks_managed_node_groups["static"].iam_role_name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 }

@@ -27,6 +27,15 @@ spec:
         app: lscached-serve
     spec:
       serviceAccountName: lscached
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: lscached-serve
+              topologyKey: "kubernetes.io/hostname"
       containers:
       - args:
         - /lscached
@@ -50,7 +59,7 @@ spec:
         - name: AWS_REGION
           value: {{ .Values.region }}
         - name: TMPDIR
-          value: /tmp
+          value: /cache
         - name: LSC_CACHE_DIRECTORY
           value: /cache
         - name: LSC_NUM_BDSRV
@@ -80,6 +89,13 @@ spec:
           value: default/
         - name: LSC_WRITE_BUFFER_SIZE_BYTES
           value: "536870912"
+{{- if ne .Values.provider "aws" }}
+        - name: LSC_DISK_CACHE_EVICTION_TRIGGER_THRESHOLD_BYTES
+          value: "2147483648" # 2GB
+{{- else }}
+        - name: LSC_DISK_CACHE_EVICTION_TRIGGER_THRESHOLD_BYTES
+          value: "21474836480" # 20GB
+{{- end }}
         image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-lscached:{{ default .Chart.AppVersion (.Values.lscached).version }}
         imagePullPolicy: IfNotPresent
         name: lscached-serve
@@ -95,14 +111,28 @@ spec:
         volumeMounts:
         - mountPath: /cache
           name: cache
+{{- if ne .Values.provider "aws" }}
           subPathExpr: $(POD_NAME)
+{{- end }}
       priorityClassName: deno-system-high-priority
       terminationGracePeriodSeconds: 10
+{{- if ne .Values.provider "aws" }}
       volumes:
       - hostPath:
           path: /mnt/lscache-{{ .Release.Namespace }}
           type: DirectoryOrCreate
         name: cache
+{{- else }}
+  volumeClaimTemplates:
+  - metadata:
+      name: cache
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "ebs-sc"
+      resources:
+        requests:
+          storage: 100Gi
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: CronJob

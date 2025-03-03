@@ -108,6 +108,13 @@ metadata:
   name: deno-metrics
 rules:
   - apiGroups:
+     - "metrics.k8s.io"
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+  - apiGroups:
       - ""
     resources:
       - nodes
@@ -120,6 +127,7 @@ rules:
       - ""
     resources:
       - nodes/metrics
+      - nodes/stats
     verbs:
       - get
   - nonResourceURLs:
@@ -228,8 +236,16 @@ spec:
         - secretRef:
             name: controller-credentials
         env:
+        - name: ISOLATE_WORKER_TOLERATIONS
+          value: {{ .Values.controller.isolate_worker.tolerations | toJson | quote}}
+        - name: ISOLATE_WORKER_NODE_AFFINITIES
+          value: {{ .Values.controller.isolate_worker.node_affinities | toJson | quote}}
         - name: ISOLATE_WORKER_CPU_REQUEST
           value: {{ quote (default "15m" .Values.controller.isolate_worker_cpu_request) }}
+        - name: ISOLATE_WORKER_MEMORY_REQUEST
+          value: {{ quote (default "32M" .Values.controller.isolate_worker_memory_request) }}
+        - name: ISOLATE_WORKER_MEMORY_LIMIT
+          value: {{ quote (default "4096M" .Values.controller.isolate_worker_memory_limit) }}
         - name: ISOLATE_WORKER_MIN_CPU_PER_NODE
           value: {{ quote (default "1500m" .Values.controller.isolate_worker_min_cpu_per_node) }}
         - name: MIN_ISOLATE_WORKERS_REPLICAS
@@ -252,10 +268,18 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: K8S_NAMESPACE
+        - name: K8S_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: K8S_NAMESPACE_NAME
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: K8S_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         - name: SVMC_ENDPOINT
           value: svmcd.{{ .Release.Namespace }}.svc.cluster.local:7293
         - name: LSC_ENDPOINT
@@ -273,8 +297,6 @@ spec:
           value: {{ .Values.provider }}
         - name: CLUSTER_REGION
           value: {{ .Values.region }}
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: http://main-collector.{{ .Release.Namespace }}.svc.cluster.local:4317
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.name=deno-controller,service.namespace=deno_cluster"
         {{- if .Values.blob.minio }}
@@ -286,11 +308,11 @@ spec:
           value: minioadmin
         - name: AWS_SECRET_ACCESS_KEY
           value: minioadmin
-        - name: HOSTMAP_SOURCE_default
-          value: '{"hostname":"*","s3Endpoint":"http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000","s3Bucket":{{ quote .Values.blob.minio.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
+        - name: APPCONFIG_BUCKET
+          value: {{ .Values.blob.minio.code_storage_bucket }}
         {{- else if .Values.blob.s3 }}
-        - name: HOSTMAP_SOURCE_default
-          value: '{"hostname":"*","s3Bucket":{{ quote .Values.blob.s3.code_storage_bucket }},"s3Region":{{ quote .Values.region }},"s3Prefix":"hostmap/"}'
+        - name: APPCONFIG_BUCKET
+          value: {{ .Values.blob.s3.code_storage_bucket }}
         {{- end }}
         {{- range .Values.controller.env }}
         - name: {{ .name }}

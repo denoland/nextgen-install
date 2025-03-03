@@ -47,4 +47,4 @@ infrastructure.
 ## Documentation
 
 - [Release notes](./RELEASE_NOTES.md)
-- [Manual](./MANUAL.md)
+- [Wiki](https://github.com/denoland/nextgen-install/wiki)

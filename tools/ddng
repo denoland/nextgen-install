@@ -4,7 +4,8 @@
 import { parseArgs } from "jsr:@std/cli@1.0.3/parse-args";
 import { join } from "jsr:@std/path@1.0.3/join";
 import { ensureDir } from "jsr:@std/fs@1.0.3";
-import { encodeBase64 } from "jsr:@std/encoding@1.0.3/base64";
+import { crypto } from "jsr:@std/crypto@1.0.3";
+import { encodeBase64Url } from "jsr:@std/encoding@1.0.7";
 
 interface DeployArgs {
   domain?: string;
@@ -13,6 +14,8 @@ interface DeployArgs {
   env?: Record<string, string>;
   s3Bucket?: string;
   azStorageAccount?: string;
+  authKey?: string;
+  authClaims?: string;
   skipOptimization?: boolean;
   otelServiceName?: string;
   otelServiceVersion?: string;
@@ -20,16 +23,170 @@ interface DeployArgs {
 }
 
 interface UserConfig {
-  env?: Record<string, string>;
+  code?: string;
   entrypoint?: string;
+  env?: Record<string, string>;
   args?: string[];
   otel?: OtelConfig;
+  cache?: Record<string, CacheConfig>;
 }
 
 interface OtelConfig {
   serviceName?: string;
   serviceVersion?: string;
   resourceAttributes?: Record<string, string>;
+}
+
+interface CacheConfig {
+  private: Record<string, string>;
+  shared?: Record<string, string>;
+  tags: Record<string, string>;
+}
+
+type BucketPayload = string | { path: string };
+
+// Return a function for writing content into the storage bucket.
+function createWriter(args: Pick<DeployArgs, "s3Bucket" | "azStorageAccount">) {
+  const s3Endpoint = Deno.env.get("S3_ENDPOINT");
+  const backend = args.s3Bucket ? "aws" : args.azStorageAccount ? "az" : null;
+
+  if (!backend) {
+    throw new Error("No storage provider specified.");
+  }
+
+  // Write the provided file or string into the given path. Returns
+  // the full URL of the created object on success or false.
+  return async function write(
+    path: string,
+    payload: BucketPayload,
+  ): Promise<string | false> {
+    if (backend === "aws") {
+      const fullPath = `s3://${args.s3Bucket}/${path}`;
+      const cmdArgs = [
+        "s3",
+        "cp",
+        typeof payload === "string" ? "-" : payload.path,
+        fullPath,
+      ];
+      if (s3Endpoint !== undefined) {
+        cmdArgs.push(`--endpoint=${s3Endpoint}`);
+      }
+      const writeCommand = new Deno.Command("aws", {
+        args: cmdArgs,
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "piped",
+      });
+
+      const child = writeCommand.spawn();
+
+      if (typeof payload === "string") {
+        const writer = child.stdin.getWriter();
+        await writer.write(new TextEncoder().encode(payload));
+        writer.close();
+      }
+
+      if ((await child.output()).success) {
+        return fullPath;
+      }
+    } else if (backend === "az") {
+      const child = new Deno.Command("az", {
+        args: [
+          "storage",
+          "blob",
+          "upload",
+          "-o",
+          "none",
+          "--only-show-errors",
+          "--overwrite",
+          ...typeof payload === "string"
+            ? ["--data", payload]
+            : ["-f", payload.path],
+          "--account-name",
+          args.azStorageAccount!,
+          "-c",
+          "deployments",
+          "-n",
+          path,
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+
+      if ((await child.output()).success) {
+        return `s3://deployments/${path}`;
+      }
+    }
+
+    return false;
+  };
+}
+
+async function createJwtToken(
+  args: Pick<DeployArgs, "authKey" | "authClaims">,
+): Promise<string | undefined> {
+  if (!args.authKey) return;
+
+  const keyContent = await Deno.readTextFile(args.authKey);
+  const base64 = keyContent.replace(/(-{5}[^\\n]+-{5}|\s+)/g, "");
+  const buf = Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
+
+  let key;
+  try {
+    key = await crypto.subtle.importKey(
+      "pkcs8",
+      buf,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"],
+    );
+  } catch (e) {
+    console.error("Could not load JWT signing key from the pem file");
+    console.error(e);
+    Deno.exit(1);
+  }
+
+  let claimsOverride;
+  try {
+    claimsOverride = args.authClaims ? JSON.parse(args.authClaims) : {};
+  } catch (e) {
+    console.error("--auth-claims must be a valid json.");
+    console.error(e);
+    Deno.exit(1);
+  }
+
+  const CLUSTER_ENDPOINT = new URL(
+    Deno.env.get("CLUSTER_ENDPOINT") || "http://localhost",
+  );
+  const aud = CLUSTER_ENDPOINT.hostname.match(/[a-z]/i)
+    ? CLUSTER_ENDPOINT.hostname
+    : "localhost";
+
+  const header = encodeBase64Url(JSON.stringify({
+    typ: "JWT",
+    alg: "ES256",
+  }));
+
+  const claims = encodeBase64Url(JSON.stringify({
+    iss: "local",
+    aud,
+    sub: "admin",
+    exp: Math.trunc(Date.now() / 1000 + 300),
+    scope: "appconfig",
+    ...claimsOverride,
+  }));
+
+  const message = `${header}.${claims}`;
+  const dataToSign = new TextEncoder().encode(message);
+  const signature = encodeBase64Url(
+    await crypto.subtle.sign(
+      { name: "ECDSA", hash: "sha-256" },
+      key,
+      dataToSign,
+    ),
+  );
+
+  return `${message}.${signature}`;
 }
 
 async function deploy(args: DeployArgs) {
@@ -48,11 +205,11 @@ async function deploy(args: DeployArgs) {
     Deno.exit(1);
   }
 
+  const writeToBucket = createWriter(args);
+  const authToken = await createJwtToken(args);
+
   const sourceDir = args.sourceDir || Deno.cwd();
   let entryPoint = args.entryPoint;
-
-  // Extract root domain by stripping the first label from the deployment domain
-  const clusterDomain = args.domain.split(".").slice(1).join(".");
 
   // Prepare temp directory
   const tempDir = await Deno.makeTempDir({ prefix: "deno-cluster" });
@@ -109,34 +266,6 @@ async function deploy(args: DeployArgs) {
 
     console.log("Building package...");
 
-    const config: UserConfig = { entrypoint: entryPoint };
-    if (isNextApp) {
-      config.args = ["start"];
-    }
-    if (args.env) {
-      config.env = args.env;
-    }
-    if (
-      args.otelServiceName || args.otelServiceVersion ||
-      args.otelResourceAttributes
-    ) {
-      config.otel = {};
-      if (args.otelServiceName) {
-        config.otel.serviceName = args.otelServiceName;
-      }
-      if (args.otelServiceVersion) {
-        config.otel.serviceVersion = args.otelServiceVersion;
-      }
-      if (args.otelResourceAttributes) {
-        config.otel.resourceAttributes = args.otelResourceAttributes;
-      }
-    }
-
-    await Deno.writeTextFile(
-      join(tempDir, "pkg", "config.json"),
-      JSON.stringify(config),
-    );
-
     // Cache dependencies
     const cacheCommand = new Deno.Command("deno", {
       env: { "DENO_DIR": join(tempDir, "pkg", "deno_dir") },
@@ -180,160 +309,126 @@ async function deploy(args: DeployArgs) {
     // Upload package
     console.log("Uploading package...");
     const codePath = `code/pkg-${Date.now()}-${crypto.randomUUID()}.tar`;
-    let codeUrl: string;
-    let uploadCommand: Deno.Command;
-
-    if (args.s3Bucket) {
-      const endpoint = Deno.env.get("S3_ENDPOINT");
-
-      codeUrl = `s3://${args.s3Bucket}/${codePath}`;
-      const cmdArgs = ["s3", "cp", join(tempDir, "pkg.tar"), codeUrl];
-      if (endpoint !== undefined) {
-        cmdArgs.push(`--endpoint=${endpoint}`);
-      }
-      uploadCommand = new Deno.Command("aws", {
-        args: cmdArgs,
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-    } else if (args.azStorageAccount) {
-      codeUrl = `s3://deployments/${codePath}`;
-      uploadCommand = new Deno.Command("az", {
-        args: [
-          "storage",
-          "blob",
-          "upload",
-          "-o",
-          "none",
-          "--only-show-errors",
-          "-f",
-          join(tempDir, "pkg.tar"),
-          "--account-name",
-          args.azStorageAccount,
-          "-c",
-          "deployments",
-          "-n",
-          codePath,
-        ],
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-    } else {
-      throw new Error("No storage provider specified");
-    }
-    const { success: uploadSuccess } = await uploadCommand
-      .output();
-    if (!uploadSuccess) {
+    const codeUrl = await writeToBucket(codePath, {
+      path: join(tempDir, "pkg.tar"),
+    });
+    if (!codeUrl) {
       console.error("Failed to upload package.");
       Deno.exit(1);
     }
 
-    // Construct layered code URL
-    let layers = encodeBase64(codeUrl);
-    if (Deno.env.get("LAYERS_PREFIX")) {
-      layers = `${Deno.env.get("LAYERS_PREFIX")},${layers}`;
-    }
-    if (Deno.env.get("LAYERS_SUFFIX")) {
-      layers = `${layers},${Deno.env.get("LAYERS_SUFFIX")}`;
-    }
-    const layeredCodeUrl = `layers://${layers}`;
+    // Construct the config object.
+    const cacheAttrs = { org: "placeholder", random: crypto.randomUUID() };
+    const appconfigJson = JSON.stringify(
+      <UserConfig> {
+        code: "/" + codePath,
+        entrypoint: entryPoint,
+        args: isNextApp ? ["start"] : undefined,
+        env: Object.keys(args.env || {}).length > 0 ? args.env : undefined,
+        otel: (args.otelServiceName || args.otelServiceVersion ||
+            args.otelResourceAttributes)
+          ? {
+            serviceName: args.otelServiceName,
+            serviceVersion: args.otelServiceVersion,
+            resourceAttributes: args.otelResourceAttributes,
+          }
+          : undefined,
+        cache: {
+          "*": {
+            private: { ...cacheAttrs },
+            tags: {},
+          },
+          "http": {
+            private: {
+              ...cacheAttrs,
+              subspace: "http",
+            },
+            tags: {},
+          },
+        },
+      },
+    );
 
     // Make a HTTP request to the cluster to trigger deployment
     if (!(args.skipOptimization ?? false)) {
       console.log("Optimizing deployment...");
-      const optimizeCommand = fetch(`https://${args.domain}`, {
-        method: "GET",
-        headers: {
-          "x-deno-deployment-id": layeredCodeUrl,
-        },
-      });
-      const optimizeResponse = await optimizeCommand;
-      if (!optimizeResponse.ok) {
-        throw new Error(
-          `Failed to optimize deployment: ${optimizeResponse.status} ${optimizeResponse.statusText}`,
+      const CLUSTER_ENDPOINT = Deno.env.get("CLUSTER_ENDPOINT");
+      const headers: Record<string, string> = {
+        "x-forwarded-host": args.domain,
+        "x-deno-appconfig": appconfigJson,
+      };
+
+      if (authToken) {
+        headers["x-deno-authorization"] = `Bearer ${authToken}`;
+      }
+
+      try {
+        const response = await fetch(
+          CLUSTER_ENDPOINT ?? `https://${args.domain}`,
+          { headers },
         );
+
+        // Proxy always sends back a `via` header before it starts proxying the
+        // response from an isolate.
+        //
+        // Checking the request status is not reliable here if the user script
+        // returns a non-200 response. In that case the optimization has still
+        // been successful.
+        if (!response.headers.has("via")) {
+          throw new Error(
+            `Failed to optimize deployment: ${response.status}`,
+          );
+        }
+      } catch (e) {
+        console.error("Failed to optimize deployment");
+        throw e;
       }
     } else {
       console.log("Skipping optimization step...");
     }
 
-    // Update hostmap
-    console.log("Updating hostmap...");
-    if (args.s3Bucket) {
-      const endpoint = Deno.env.get("S3_ENDPOINT");
-
-      codeUrl = `s3://${args.s3Bucket}/${codePath}`;
-      const cmdArgs = [
-        "s3",
-        "cp",
-        "-",
-        `s3://${args.s3Bucket}/hostmap/${args.domain}`,
-      ];
-      if (endpoint !== undefined) {
-        cmdArgs.push(`--endpoint=${endpoint}`);
-      }
-      const updateHostmapCommand = new Deno.Command("aws", {
-        args: cmdArgs,
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "piped",
-      });
-      const child = updateHostmapCommand.spawn();
-      const writer = child.stdin.getWriter();
-      await writer.write(new TextEncoder().encode(layeredCodeUrl));
-      writer.close();
-      const { success: hostmapSuccess } = await child.output();
-      if (!hostmapSuccess) {
-        console.error("Failed to update hostmap.");
-        Deno.exit(1);
-      }
-    } else if (args.azStorageAccount) {
-      const updateHostmapCommand = new Deno.Command("az", {
-        args: [
-          "storage",
-          "blob",
-          "upload",
-          "-o",
-          "none",
-          "--only-show-errors",
-          "--overwrite",
-          "--data",
-          layeredCodeUrl,
-          "--account-name",
-          args.azStorageAccount,
-          "-c",
-          "deployments",
-          "-n",
-          `hostmap/${args.domain}`,
-        ],
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      const { success: hostmapSuccess } = await updateHostmapCommand.output();
-      if (!hostmapSuccess) {
-        console.error("Failed to update hostmap.");
-        Deno.exit(1);
-      }
-    } else {
-      throw new Error("No storage provider specified");
+    // Update domain mapping
+    console.log(`Attaching ${args.domain}...`);
+    if (
+      !writeToBucket(
+        `domains/${args.domain}`,
+        appconfigJson,
+      )
+    ) {
+      console.error("Failed to attach domain.");
+      Deno.exit(1);
     }
 
-    let purgeSuccess = false;
-    try {
-      const res = await fetch(
-        `https://${args.domain}/.deno/hostmap_cache/${args.domain}`,
-        {
-          method: "DELETE",
-        },
-      );
-      purgeSuccess = res.ok;
-    } catch {
-      purgeSuccess = false;
+    // Refresh vectorized change notification
+    const vcnKey = new BigUint64Array(
+      await crypto.subtle.digest(
+        "BLAKE3",
+        new TextEncoder().encode(`domains/${args.domain}`),
+      ),
+      0,
+      1,
+    )[0] % 1000n;
+    console.log(`VCN: ${vcnKey}`);
+
+    if (
+      !await writeToBucket(
+        `appconfig_vcn/${vcnKey}`,
+        crypto.randomUUID(),
+      )
+    ) {
+      console.error("Failed to write VCN.");
+      Deno.exit(1);
     }
-    if (!purgeSuccess) {
-      console.error(
-        "Failed to purge hostmap cache. It might take a while (around a minute) for the new new deployment to become visible.",
-      );
+
+    // Write global notification.
+    if (
+      !await writeToBucket(
+        "appconfig_vcn/_",
+        crypto.randomUUID(),
+      )
+    ) {
+      console.error("Failed to write global notification.");
+      Deno.exit(1);
     }
 
     console.log(`Deployed to https://${args.domain}`);
@@ -359,6 +454,9 @@ function usage() {
     "  -e,--entry-point <file>          Specify entry point (default: auto detect)",
   );
   console.log(
+    "  -k,--key <file>                  The private key to use for the JWT authorization",
+  );
+  console.log(
     "  --env <KEY=VALUE>                Set environment variables using KEY=VALUE format, can be specified multiple times",
   );
   console.log(
@@ -375,6 +473,9 @@ function usage() {
   );
   console.log(
     "  --az-storage-account <acc>       Azure storage account (required if using Azure)",
+  );
+  console.log(
+    "  --auth-claims <json>             Overrides the default values for the authorization claims",
   );
   console.log(
     "  --skip-optimize                  Skip the optimization step",
@@ -399,12 +500,15 @@ if (import.meta.main) {
       "otel-service-name",
       "otel-service-version",
       "otel-resource-attribute",
+      "key",
+      "auth-claims",
     ],
     collect: ["env", "otel-resource-attribute"],
     alias: {
       d: "domain",
       s: "source-dir",
       e: "entry-point",
+      k: "key",
     },
     boolean: ["skip-optimize"],
   });
@@ -426,6 +530,8 @@ if (import.meta.main) {
         : undefined,
       s3Bucket: args["s3-bucket"],
       azStorageAccount: args["az-storage-account"],
+      authKey: args["key"],
+      authClaims: args["auth-claims"],
       skipOptimization: args["skip-optimize"],
       otelServiceName: args["otel-service-name"],
       otelServiceVersion: args["otel-service-version"],

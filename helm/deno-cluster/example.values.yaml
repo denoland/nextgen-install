@@ -44,16 +44,45 @@ controller:
     #   value: "0.6"
     # - name: CLUSTER_MEMORY_PCT_TARGET
     #   value: "0.6"
+    # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    #   value: http://main-collector.default.svc.cluster.local:4317
 
 proxy:
   image: ghcr.io/denoland/cluster-proxy:v0.0.17
-  # The service_port overrides which port the Service resource for the proxy is
+  # The service ports override which port the Service resource for the proxy is
   # opened. This is used for example in minikube to be able to expose the port
   # on localhost.
-  # service_port: 4443
-  # http_redirect_port: 4080
+  # https_service_port: 4443
+  # http_service_port: 4080
+  # http_redirect_port: 4081
   # serviceaccount_annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::329599618741:role/...
+  env:
+    # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    #   value: http://main-collector.default.svc.cluster.local:4317
+
+# This is used to assign different permissions to a set of public keys used in
+# JWT auth .
+auth:
+  # Turning this flag on allows requests to bypass the auth when a JWT token is
+  # not presented in the requests.
+  allow_bypass: false
+  # A list of different accounts and their EC public keys.
+  accounts:
+    - name: user123
+      publicKey: |
+        -----BEGIN PUBLIC KEY-----
+        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEofG+JaGlIKAx3qF4qZmJz3/y3xIwm+nU
+        0wFHMII6tB77sUqXMjPXY7OVgExkYAP3EtsxLxOslq7PduhfPl5R5g==
+        -----END PUBLIC KEY-----
+      scopes: "appconfig"
+    - name: admin
+      publicKey: |
+        -----BEGIN PUBLIC KEY-----
+        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEofG+JaGlIKAx3qF4qZmJz3/y3xIwm+nU
+        0wFHMII6tB77sUqXMjPXY7OVgExkYAP3EtsxLxOslq7PduhfPl5R5g==
+        -----END PUBLIC KEY-----
+      scopes: "*"
 
 lscached:
   image: ghcr.io/denoland/cluster-lscached:v0.0.17
@@ -69,12 +98,4 @@ blob:
   # Uncomment the following block to configure blob storage in-cluster with Minio
   minio:
     code_storage_bucket: deployments
-    hostmap_storage_bucket: deployments
     cache_storage_bucket: cache
-# Uncomment the following block to send logs to an OTLP endpoint.
-# otlp:
-#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
-#   auth:
-#     authenticator: basicauth/otlp
-#     username: abc==
-#     password: xyz==

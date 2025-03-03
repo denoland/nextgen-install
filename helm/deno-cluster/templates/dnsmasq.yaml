@@ -1,0 +1,89 @@
+# Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: dnsmasq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: dnsmasq
+spec:
+  type: ClusterIP
+  selector:
+    app: dnsmasq
+  ports:
+    - name: dns
+      port: 53
+      protocol: UDP
+      targetPort: 53
+    - name: dns-tcp
+      port: 53
+      protocol: TCP
+      targetPort: 53
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dnsmasq
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: dnsmasq
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dnsmasq
+  template:
+    metadata:
+      labels:
+        app: dnsmasq
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: proxy
+              topologyKey: "kubernetes.io/hostname"
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: karpenter.sh/provisioner-name
+                    operator: DoesNotExist
+              {{- if eq .Values.provider "aws" }}
+              - matchExpressions:
+                  - key: eks.amazonaws.com/nodegroup
+                    operator: In
+                    values:
+                      - static
+              {{- end }}
+      priorityClassName: deno-system-high-priority
+      containers:
+      - name: dnsmasq
+        image: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-dnsmasq:{{ default .Chart.AppVersion (.Values.controller).version }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 53
+          protocol: UDP
+          name: dns
+        - containerPort: 53
+          protocol: TCP
+          name: dns-tcp
+        args:
+        - --cache-size=1500
+        - --interface=eth0
+        - --no-hosts
+        - --no-resolv
+        {{ range $i, $v := .Values.dnsmasq.upstreamServers }}
+        - --server={{ $v }}
+        {{ end }}
+        resources:
+          {{- toYaml .Values.dnsmasq.resources | nindent 12 }}
+      {{- if .Values.dnsmasq.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.dnsmasq.nodeSelector | nindent 8 }}
+      {{- end }}
