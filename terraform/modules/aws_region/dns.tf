@@ -4,9 +4,14 @@ resource "aws_route53_zone" "domain_name" {
   name = "${var.domain_name}."
 }
 
+
+locals {
+  cert_records = var.enable_loadbalancer_tls_termination ? aws_acm_certificate.cert.0.domain_validation_options : []
+}
+
 resource "aws_route53_record" "record_set1" {
   for_each = {
-    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
+    for dvo in local.cert_records : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type

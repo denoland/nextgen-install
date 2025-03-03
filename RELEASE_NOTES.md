@@ -1,5 +1,42 @@
 # Releases
 
+### 0.0.23 / 2025.02.28
+
+- Introduced the [AppConfig] system, replacing the previous deployment mechanism
+  that relied on `layers://` URLs, the `hostmap` directory, and the
+  `x-deno-isolate-id` header.
+- Several cluster APIs now require authentication. See [Cluster API Auth] for
+  details.
+- Implemented dynamic TLS certificate serving for custom domains in the proxy.
+  See [Dynamic TLS Certificates] for details.
+- Improved cache support. See [Cache] for details.
+  - Implemented an automatic HTTP response cache.
+  - Added cache sharing between deployments configurable via [AppConfig].
+- Updated packaged deno binary:
+  - Changed spans to use fractional milliseconds for timestamps instead of
+    fractional seconds.
+  - Added built-in HTTP server metrics:
+    - `http.server.request.duration`
+    - `http.server.active_requests`
+    - `http.server.request.body.size`
+    - `http.server.response.body.size`
+- Added proxy metrics:
+  - `http_requests_total`: Counter for HTTP requests with deployment ID and
+    status attributes
+  - `response_latency`: Histogram tracking HTTP response latency in milliseconds
+  - `http_requests_cache_hit`: Counter tracking HTTP requests that hit the cache
+  - `http_response_cache_writes`: Counter tracking HTTP responses written to cache
+- Configured workers to use a separate `dnsmasq` DNS resolver for improved
+  security.
+- Eliminated internal HTTP/2 to HTTP/1 translation between proxies and workers.
+- The proxy now adds a `Via` header to all HTTP responses.
+- Changed `lscached` to use persistent EBS storage volumes instead of local
+  disks when deployed to AWS.
+- Added pod anti-affinity for `lscached-serve` and `proxy` services to
+  distribute their replicas across nodes.
+- Added support for fully custom OpenTelemetry collector configuration. See
+  [OpenTelemetry Configuration] for details.
+
 ### 0.0.22 / 2025.01.08
 
 - All deployments now use an extra layer of isolation, based on Google's gVisor,
@@ -68,3 +105,9 @@
   isolate. The underlying cause is now provided via the `x-deno-error` response
   header.
 - The container registry was switched to Github Container Registry (ghcr.io).
+
+[AppConfig]: https://github.com/denoland/nextgen-install/wiki/AppConfig
+[Cache]: https://github.com/denoland/nextgen-install/wiki/Cache
+[Cluster API Auth]: https://github.com/denoland/nextgen-install/wiki/Cluster-API-Auth
+[Dynamic TLS Certificates]: https://github.com/denoland/nextgen-install/wiki/Dynamic-TLS-Certificates
+[OpenTelemetry Configuration]: https://github.com/denoland/nextgen-install/wiki/OpenTelemetry-Configuration

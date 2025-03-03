@@ -1,19 +1,11 @@
 // Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
 
-output "nlb_cert_arn" {
-  value = aws_acm_certificate.cert.arn
-}
-
 output "iam_serviceaccount_role_arn" {
   value = aws_iam_role.eks_service_account.arn
 }
 
 output "iam_s3_serviceaccount_role_arn" {
   value = aws_iam_role.eks_lscached_service_account.arn
-}
-
-output "code_storage_bucket" {
-  value = aws_s3_bucket.code_storage.bucket
 }
 
 output "cache_storage_bucket" {
@@ -35,5 +27,10 @@ output "values_yaml" {
     cache_bucket          = aws_s3_bucket.lsc_storage.id
     basic_service_account = aws_iam_role.eks_service_account.arn
     cache_service_account = aws_iam_role.eks_lscached_service_account.arn
+    proxy_service_account = aws_iam_role.eks_proxy_service_account.arn
   })
+}
+
+output "code_storage_bucket" {
+  value = aws_s3_bucket.code_storage.bucket
 }

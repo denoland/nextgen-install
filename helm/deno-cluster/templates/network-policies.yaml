@@ -175,15 +175,13 @@ spec:
     - Egress
 
 ---
-# TODO(pisicsaureus): This is a temporary workaround for the fact that
-# isolate-worker needs access to a DNS server that can resolve the origin
-# service.
+# Allow traffic to dnsmasq (public DNS) service.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   labels:
     app: isolate-worker
-  name: isolate-worker-egress-allow-kube-dns
+  name: isolate-worker-egress-allow-dnsmasq
   namespace: {{ .Release.Namespace }}
 spec:
   egress:
@@ -196,7 +194,7 @@ spec:
         - namespaceSelector: {}
           podSelector:
             matchLabels:
-              k8s-app: kube-dns
+              app: dnsmasq
   podSelector:
     matchLabels:
       app: isolate-worker

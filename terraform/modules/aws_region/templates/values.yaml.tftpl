@@ -14,15 +14,8 @@ blob:
     code_storage_bucket: ${code_bucket}
     cache_storage_bucket: ${cache_bucket}
 
-# Uncomment the following block to send logs to an OTLP endpoint.
-# otlphttp:
-#   endpoint: https://otlp-gateway-prod-us-east-0.grafana.net/otlp
-#   auth:
-#     authenticator: basicauth/otlp
-#     username: "103456"
-#     password: "ghc_xxx"
-# otlp:
-#   endpoint: http://otel-collector.default.svc.cluster.local:4317
+auth:
+  allow_bypass: true
 
 controller:
   serviceaccount_annotations:
@@ -33,7 +26,7 @@ controller:
 
 proxy:
   serviceaccount_annotations:
-    eks.amazonaws.com/role-arn: ${basic_service_account}
+    eks.amazonaws.com/role-arn: ${proxy_service_account}
 
 lscached:
   serviceaccount_annotations:

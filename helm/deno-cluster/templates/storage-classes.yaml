@@ -1,0 +1,17 @@
+# Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+{{ if .Values.storageClasses.enabled }}
+{{ if eq .Values.provider "aws" }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-sc
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+{{ end }}
+{{ end }}

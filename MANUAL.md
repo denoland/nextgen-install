@@ -23,10 +23,12 @@ The following options are available:
 | `-d`  | `--domain`             | domain      | Deployment domain (e.g., hello.mycluster.deno-cluster.net)                        |
 | `-s`  | `--source-dir`         | dir         | Source directory (default: current directory)                                     |
 | `-e`  | `--entry-point`        | file        | Specify entry point (default: auto detect)                                        |
+| `-k`  | `--key`                | file        | Path to a pem file used for JWT authorization for calls to the cluster            |
 |       | `--env`                | KEY=VALUE   | Set environment variables using KEY=VALUE format, can be specified multiple times |
 |       | `--s3-bucket`          | bucket      | Specify S3 bucket (required if using AWS)                                         |
 |       | `--az-storage-account` | account     | Azure storage account (required if using Azure)                                   |
 |       | `--skip-optimize`      |             | Skip the optimization step                                                        |
+|       | `--auth-claims`        | json        | Allows overriding the JWT claims                                                  |
 
 ### With AWS S3
 
@@ -71,6 +73,7 @@ To change them, refer to the [example values file for Helm][example-values]
 * `ISOLATE_WORKER_MIN_CPU_PER_NODE` (default `1500m`): How much CPU to schedule
   on a node. In combination with `ISOLATE_WORKER_CPU_REQUEST`, this tells the
   controller how many free pods to schedule on each node.
+* `ISOLATE_WORKER_MEMORY_LIMIT` (default `512M`): Max memory allowed for an isolate.
 
 > [!IMPORTANT]
 > It's important to highlight the relationship between
@@ -108,32 +111,35 @@ The controller will **up** when either one of those is reached, and scale back
 
 ### OpenTelemetry
 
-Logs and traces from isolates are exported via OpenTelemetry to an OpenTelemetry
-Collector deployed in the cluster. By default, these aren't exported anywhere.
-The Helm chart supports configuration options to send these signals to your
-prefered destination. We currently support anonymous OTLP over gRPC and OTLP
-over HTTP with basic auth. Add the following to your values file:
+Logs, traces and metrics are emitted using the OpenTelemetry protocol. To
+configure where to send these signals, set the `OTEL_EXPORTER_OTLP_ENDPOINT`
+environment variable on the following components:
 
 ```yaml
-# OTLP/gRPC
-otlp:
-  endpoint: http://your.collector:4317
+controller:
+  # ...
+  env:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://your-otel-endpoint:4317
 
-# OTLP/HTTP
-otlphttp:
-  endpoint: https://your.collector:4318
-  # optional:
-  auth:
-    authenticator: "basicauth/otlp" # must be exactly
-    username: <user>
-    password: <pass>
+proxy:
+  # ...
+  env:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://your-otel-endpoint:4317
 ```
 
-> ![NOTE]
-> The Helm chart requires the OpenTelemetry Operator as a dependency. To have
-> full control over logs and traces, including relabelling and sampling, we
-> recommend deploying your own collector instance inside the cluster and use
-> that as your export endpoint in the Helm chart configuration.
+Signals emitted by user applications are relayed through the `proxy` component
+using the OTLP over HTTP protocol, it needs another environment variable to
+forward those signals to an OpenTelemetry Collector:
+
+```yaml
+proxy:
+  # ...
+  env:
+    - name: OTEL_RELAY_UPSTREAM_URL
+      value: http://your-otel-endpoint:4318
+```
 
 ## Advanced Features
 

@@ -35,6 +35,11 @@ installation of the Helm chart later. If you're running in CI and can't access
 that file, the values are included in the plan's output and can be copied from
 there.
 
+**NOTE:** It's expected that the Terraform apply fail the first time. This is
+due to two things: Interdependencies between Terraform providers, and a
+dependency on DNS configuration. Move on to the next steps, you will be asked
+to re-run Terraform, at which point it should pass successfully.
+
 ## DNS Configuration
 
 In your domain registrar or DNS provider, delegate the DNS zone for your cluster
@@ -89,44 +94,29 @@ export DENO_CLUSTER_REGION=us-west-2
 aws eks update-kubeconfig --name $DENO_CLUSTER_NAME --region $DENO_CLUSTER_REGION
 ```
 
-## Install Dependencies In The Cluster
-
-The Deno Cluster Helm chart depends on `karpenter`, `cert-manager`, and
-`opentelemetry-operator`. You can install them with the following commands:
-
-```bash
-helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts --force-update
-helm repo add jetstack https://charts.jetstack.io --force-update
-
-helm install \
-  cert-manager jetstack/cert-manager \
-  --namespace cert-manager \
-  --create-namespace \
-  --version v1.15.3 \
-  --set crds.enabled=true \
-  --set enableCertificateOwnerRef=true \
-  --set dns01RecursiveNameserversOnly=true
-
-helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
-  --namespace opentelemetry-operator-system \
-  --create-namespace \
-  --set "manager.collectorImage.repository=otel/opentelemetry-collector-k8s" \
-  --set admissionWebhooks.certManager.enabled=false \
-  --set admissionWebhooks.autoGenerateCert.enabled=true
-```
-
-Note: this script is included for convenience at `helm/deps.sh`.
-
 # Install The Deno Cluster Helm Chart
 
 Terraform should have created a file called `values.yaml` in the working
-directory, make sure it exists before installing the chart with the following
-command:
-
-:warning: The Helm chart must be installed into the `default` namespace.
+directory, make sure it exists by running `terraform apply` again, then install
+the chart with the following command:
 
 ```bash
 helm install --namespace=default -f ./values.yaml deno-cluster ../helm/deno-cluster
+```
+
+> [!WARNING]
+> The auto-generated `values.yaml` file sets `auth.allow_bypass: true`, which
+> bypasses the authorization mechanism around isolate-workers, and allows them
+> to reach internal APIs. We recommend you enable [Cluster API authorization][cluster-auth]
+> to ensure that untrusted workloads cannot access the cluster's internal APIs.
+
+## Install the `metrics-server`
+
+Deno Cluster requires `metrics-server` to be available on the cluster, you can
+install it with this command:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 ```
 
 # Create a Deployment
@@ -147,3 +137,4 @@ Note: substitute `<code-storage-bucket>`for the value from the terraform output,
 [aws]: https://aws.amazon.com/cli/
 [helm]: https://helm.sh/docs/intro/install/
 [kubectl]: https://kubernetes.io/docs/tasks/tools/#kubectl
+[cluster-auth]: https://github.com/denoland/nextgen-install/wiki/Cluster-API-Auth

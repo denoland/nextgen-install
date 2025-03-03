@@ -92,11 +92,10 @@ az aks get-credentials --resource-group <resource_group_name> --name <aks_cluste
 
 ## Install Dependencies In The Cluster
 
-The Deno Cluster Helm chart depends on `cert-manager` and
-`opentelemetry-operator`. You can install both with the following commands:
+The Deno Cluster Helm chart depends on `cert-manager`, you can install it with
+the following command:
 
 ```bash
-helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts --force-update
 helm repo add jetstack https://charts.jetstack.io --force-update
 
 helm install \
@@ -109,16 +108,7 @@ helm install \
   --set-json 'serviceAccount={"labels": {"azure.workload.identity/use": "true"}}' \
   --set enableCertificateOwnerRef=true \
   --set dns01RecursiveNameserversOnly=true
-
-helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
-  --namespace opentelemetry-operator-system \
-  --create-namespace \
-  --set "manager.collectorImage.repository=otel/opentelemetry-collector-k8s" \
-  --set admissionWebhooks.certManager.enabled=false \
-  --set admissionWebhooks.autoGenerateCert.enabled=true
 ```
-
-Note: this script is included for convenience at `helm/deps.sh`.
 
 # Install The Deno Cluster Helm Chart
 
