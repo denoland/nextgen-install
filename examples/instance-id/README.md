@@ -62,4 +62,4 @@ Random global: qapm1ch8oe
 Counter: 2
 ```
 
-[1]: ../../MANUAL.md#targeting-a-specific-isolate
+[1]: [https://github.com/denoland/nextgen-install/wiki/Isolate-Instance-Targeting]
