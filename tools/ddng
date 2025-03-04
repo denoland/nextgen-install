@@ -390,7 +390,7 @@ async function deploy(args: DeployArgs) {
     // Update domain mapping
     console.log(`Attaching ${args.domain}...`);
     if (
-      !writeToBucket(
+      !await writeToBucket(
         `domains/${args.domain}`,
         appconfigJson,
       )
