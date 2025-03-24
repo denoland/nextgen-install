@@ -8,12 +8,13 @@ import { crypto } from "jsr:@std/crypto@1.0.3";
 import { encodeBase64Url } from "jsr:@std/encoding@1.0.7";
 
 interface DeployArgs {
+  clusterEndpoint: URL;
+  clusterHostname: string;
+  apiEndpoint: URL;
   domain?: string;
   sourceDir?: string;
   entryPoint?: string;
   env?: Record<string, string>;
-  s3Bucket?: string;
-  azStorageAccount?: string;
   authKey?: string;
   authClaims?: string;
   skipOptimization?: boolean;
@@ -45,85 +46,61 @@ interface CacheConfig {
 
 type BucketPayload = string | { path: string };
 
-// Return a function for writing content into the storage bucket.
-function createWriter(args: Pick<DeployArgs, "s3Bucket" | "azStorageAccount">) {
-  const s3Endpoint = Deno.env.get("S3_ENDPOINT");
-  const backend = args.s3Bucket ? "aws" : args.azStorageAccount ? "az" : null;
+const client = Deno.createHttpClient({ allowHost: true, http2: false });
 
-  if (!backend) {
-    throw new Error("No storage provider specified.");
-  }
+// Return a function for writing content into the storage bucket.
+function createWriter(
+  authToken: string | undefined,
+  args: Pick<DeployArgs, "apiEndpoint" | "clusterEndpoint">,
+) {
+  const headers: Record<string, string> = authToken
+    ? {
+      "x-deno-authorization": `Bearer ${authToken}`,
+    }
+    : {};
+  headers["host"] = args.apiEndpoint.hostname;
 
   // Write the provided file or string into the given path. Returns
   // the full URL of the created object on success or false.
   return async function write(
     path: string,
     payload: BucketPayload,
-  ): Promise<string | false> {
-    if (backend === "aws") {
-      const fullPath = `s3://${args.s3Bucket}/${path}`;
-      const cmdArgs = [
-        "s3",
-        "cp",
-        typeof payload === "string" ? "-" : payload.path,
-        fullPath,
-      ];
-      if (s3Endpoint !== undefined) {
-        cmdArgs.push(`--endpoint=${s3Endpoint}`);
-      }
-      const writeCommand = new Deno.Command("aws", {
-        args: cmdArgs,
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "piped",
-      });
-
-      const child = writeCommand.spawn();
-
-      if (typeof payload === "string") {
-        const writer = child.stdin.getWriter();
-        await writer.write(new TextEncoder().encode(payload));
-        writer.close();
-      }
-
-      if ((await child.output()).success) {
-        return fullPath;
-      }
-    } else if (backend === "az") {
-      const child = new Deno.Command("az", {
-        args: [
-          "storage",
-          "blob",
-          "upload",
-          "-o",
-          "none",
-          "--only-show-errors",
-          "--overwrite",
-          ...typeof payload === "string"
-            ? ["--data", payload]
-            : ["-f", payload.path],
-          "--account-name",
-          args.azStorageAccount!,
-          "-c",
-          "deployments",
-          "-n",
-          path,
-        ],
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-
-      if ((await child.output()).success) {
-        return `s3://deployments/${path}`;
+  ): Promise<boolean> {
+    let body;
+    if (typeof payload === "string") {
+      body = payload;
+    } else {
+      try {
+        // TODO: stream the content once the server can accept request with no Content-Length.
+        body = await Deno.readFile(payload.path);
+      } catch (e) {
+        console.error(`Could not open ${payload.path}: ${e}`);
+        return false;
       }
     }
 
-    return false;
+    const url = new URL(args.clusterEndpoint);
+    url.pathname = path;
+    console.info(`Writing to ${path}...`);
+
+    const response = await fetch(
+      url,
+      { method: "PUT", headers, body, client },
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(
+        `Failed to upload content (status=${response.status}): ${text}`,
+      );
+    }
+
+    return response.ok;
   };
 }
 
 async function createJwtToken(
-  args: Pick<DeployArgs, "authKey" | "authClaims">,
+  args: Pick<DeployArgs, "authKey" | "authClaims" | "clusterHostname">,
 ): Promise<string | undefined> {
   if (!args.authKey) return;
 
@@ -155,13 +132,6 @@ async function createJwtToken(
     Deno.exit(1);
   }
 
-  const CLUSTER_ENDPOINT = new URL(
-    Deno.env.get("CLUSTER_ENDPOINT") || "http://localhost",
-  );
-  const aud = CLUSTER_ENDPOINT.hostname.match(/[a-z]/i)
-    ? CLUSTER_ENDPOINT.hostname
-    : "localhost";
-
   const header = encodeBase64Url(JSON.stringify({
     typ: "JWT",
     alg: "ES256",
@@ -169,10 +139,10 @@ async function createJwtToken(
 
   const claims = encodeBase64Url(JSON.stringify({
     iss: "local",
-    aud,
+    aud: args.clusterHostname,
     sub: "admin",
     exp: Math.trunc(Date.now() / 1000 + 300),
-    scope: "appconfig",
+    scope: "appconfig bucket:w",
     ...claimsOverride,
   }));
 
@@ -197,16 +167,8 @@ async function deploy(args: DeployArgs) {
     Deno.exit(1);
   }
 
-  if (!args.s3Bucket && !args.azStorageAccount) {
-    console.error(
-      "Either --s3-bucket or --az-storage-account must be provided.",
-    );
-    usage();
-    Deno.exit(1);
-  }
-
-  const writeToBucket = createWriter(args);
   const authToken = await createJwtToken(args);
+  const writeToBucket = createWriter(authToken, args);
 
   const sourceDir = args.sourceDir || Deno.cwd();
   let entryPoint = args.entryPoint;
@@ -309,10 +271,11 @@ async function deploy(args: DeployArgs) {
     // Upload package
     console.log("Uploading package...");
     const codePath = `code/pkg-${Date.now()}-${crypto.randomUUID()}.tar`;
-    const codeUrl = await writeToBucket(codePath, {
-      path: join(tempDir, "pkg.tar"),
-    });
-    if (!codeUrl) {
+    if (
+      !await writeToBucket(codePath, {
+        path: join(tempDir, "pkg.tar"),
+      })
+    ) {
       console.error("Failed to upload package.");
       Deno.exit(1);
     }
@@ -352,20 +315,18 @@ async function deploy(args: DeployArgs) {
     // Make a HTTP request to the cluster to trigger deployment
     if (!(args.skipOptimization ?? false)) {
       console.log("Optimizing deployment...");
-      const CLUSTER_ENDPOINT = Deno.env.get("CLUSTER_ENDPOINT");
-      const headers: Record<string, string> = {
-        "x-forwarded-host": args.domain,
-        "x-deno-appconfig": appconfigJson,
-      };
-
-      if (authToken) {
-        headers["x-deno-authorization"] = `Bearer ${authToken}`;
-      }
+      const headers: Record<string, string> = authToken
+        ? {
+          "x-deno-authorization": `Bearer ${authToken}`,
+        }
+        : {};
+      headers["x-deno-appconfig"] = appconfigJson;
+      headers["host"] = args.domain;
 
       try {
         const response = await fetch(
-          CLUSTER_ENDPOINT ?? `https://${args.domain}`,
-          { headers },
+          args.clusterEndpoint,
+          { headers, client },
         );
 
         // Proxy always sends back a `via` header before it starts proxying the
@@ -399,38 +360,6 @@ async function deploy(args: DeployArgs) {
       Deno.exit(1);
     }
 
-    // Refresh vectorized change notification
-    const vcnKey = new BigUint64Array(
-      await crypto.subtle.digest(
-        "BLAKE3",
-        new TextEncoder().encode(`domains/${args.domain}`),
-      ),
-      0,
-      1,
-    )[0] % 1000n;
-    console.log(`VCN: ${vcnKey}`);
-
-    if (
-      !await writeToBucket(
-        `appconfig_vcn/${vcnKey}`,
-        crypto.randomUUID(),
-      )
-    ) {
-      console.error("Failed to write VCN.");
-      Deno.exit(1);
-    }
-
-    // Write global notification.
-    if (
-      !await writeToBucket(
-        "appconfig_vcn/_",
-        crypto.randomUUID(),
-      )
-    ) {
-      console.error("Failed to write global notification.");
-      Deno.exit(1);
-    }
-
     console.log(`Deployed to https://${args.domain}`);
   } finally {
     // Clean up temp directory
@@ -460,6 +389,9 @@ function usage() {
     "  --env <KEY=VALUE>                Set environment variables using KEY=VALUE format, can be specified multiple times",
   );
   console.log(
+    "  --api-endpoint                   Specify cluster objects api endpoint (defaults to `objects.api.{cluster-endpoint}`)",
+  );
+  console.log(
     "  --otel-service-name <name>       Specify OpenTelemetry service name",
   );
   console.log(
@@ -467,12 +399,6 @@ function usage() {
   );
   console.log(
     "  --otel-resource-attribute <K=V>  Specify OpenTelemetry resource attributes in KEY=VALUE format, can be specified multiple times",
-  );
-  console.log(
-    "  --s3-bucket <bucket>             Specify S3 bucket (required if using AWS)",
-  );
-  console.log(
-    "  --az-storage-account <acc>       Azure storage account (required if using Azure)",
   );
   console.log(
     "  --auth-claims <json>             Overrides the default values for the authorization claims",
@@ -495,11 +421,10 @@ if (import.meta.main) {
       "source-dir",
       "entry-point",
       "env",
-      "s3-bucket",
-      "az-storage-account",
       "otel-service-name",
       "otel-service-version",
       "otel-resource-attribute",
+      "api-endpoint",
       "key",
       "auth-claims",
     ],
@@ -514,6 +439,19 @@ if (import.meta.main) {
   });
 
   if (args._[0] === "deploy") {
+    const clusterEndpoint = new URL(
+      Deno.env.get("CLUSTER_ENDPOINT") ?? "http://localhost",
+    );
+    const clusterHostname = Deno.env.get("CLUSTER_HOSTNAME") ??
+      (clusterEndpoint.hostname.match(/[a-z]/i)
+        ? clusterEndpoint.hostname
+        : "localhost");
+    const apiEndpoint = new URL(
+      args["api-endpoint"] ||
+        `${clusterEndpoint.protocol}//objects.api.${clusterHostname}`,
+    );
+    clusterEndpoint.pathname = "";
+
     await deploy({
       domain: args.domain,
       sourceDir: args["source-dir"],
@@ -528,8 +466,6 @@ if (import.meta.main) {
           return [e.slice(0, eqIndex), e.slice(eqIndex + 1)];
         }))
         : undefined,
-      s3Bucket: args["s3-bucket"],
-      azStorageAccount: args["az-storage-account"],
       authKey: args["key"],
       authClaims: args["auth-claims"],
       skipOptimization: args["skip-optimize"],
@@ -547,6 +483,9 @@ if (import.meta.main) {
           }),
         )
         : undefined,
+      clusterEndpoint,
+      clusterHostname,
+      apiEndpoint,
     });
   } else if (args._[0] === "help" || args.help) {
     usage();

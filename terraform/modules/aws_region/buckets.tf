@@ -20,12 +20,19 @@ resource "aws_s3_bucket_versioning" "lsc_storage" {
   }
 }
 
+locals {
+  create_code_storage_bucket = var.code_storage_bucket == null
+  code_storage_bucket        = local.create_code_storage_bucket ? aws_s3_bucket.code_storage[0].bucket : var.code_storage_bucket
+}
+
 resource "aws_s3_bucket" "code_storage" {
+  count  = local.create_code_storage_bucket ? 1 : 0
   bucket = "${var.eks_cluster_name}-code-storage-${local.short_uuid}"
 }
 
 resource "aws_s3_bucket_ownership_controls" "code_storage" {
-  bucket = aws_s3_bucket.code_storage.id
+  count  = local.create_code_storage_bucket ? 1 : 0
+  bucket = aws_s3_bucket.code_storage[0].id
 
   rule {
     object_ownership = "BucketOwnerEnforced"
@@ -33,9 +40,13 @@ resource "aws_s3_bucket_ownership_controls" "code_storage" {
 }
 
 resource "aws_s3_bucket_versioning" "code_storage" {
-  bucket = aws_s3_bucket.code_storage.id
+  count  = local.create_code_storage_bucket ? 1 : 0
+  bucket = aws_s3_bucket.code_storage[0].id
 
   versioning_configuration {
     status = "Disabled"
   }
 }
+
+# Skip trying to fetch the bucket data directly, as it leads to dependency issues
+# in multi-region setups. Instead, just use the bucket name as a string.

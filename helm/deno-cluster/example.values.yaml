@@ -19,12 +19,6 @@ hostname: mycluster.deno.co # CHANGE ME
 #   # DNS Zone records.
 #   user_assigned_identity_client_id: cccdafcd-7078-461d-a093-9d1f306efbe4
 
-# The following block is used to configure AWS-specific resources such as the
-# NLB Load Balancer.
-# aws:
-#   subnet: star-shaped-hole-dev-subnet1
-#   nlb: star-shaped-hole-dev-nlb
-
 controller:
   image: ghcr.io/denoland/cluster-controller:v0.0.17
   # serviceaccount_annotations:
@@ -39,7 +33,7 @@ controller:
     # - name: ISOLATE_TARGET_FREE_POOL_RATIO
     #   value: "0.5"
     # - name: NODE_METRICS_SELECTOR
-    #   value: "karpenter.sh/provisioner-name=default"
+    #   value: "deno.com/workloads=isolate-workers"
     # - name: CLUSTER_CPU_PCT_TARGET
     #   value: "0.6"
     # - name: CLUSTER_MEMORY_PCT_TARGET
@@ -52,11 +46,15 @@ proxy:
   # The service ports override which port the Service resource for the proxy is
   # opened. This is used for example in minikube to be able to expose the port
   # on localhost.
-  # https_service_port: 4443
-  # http_service_port: 4080
-  # http_redirect_port: 4081
-  # serviceaccount_annotations:
-  #   eks.amazonaws.com/role-arn: arn:aws:iam::329599618741:role/...
+  #   https_service_port: 4443
+  #   http_service_port: 4080
+  #   http_redirect_port: 4081
+  # Enable proxy protocol support for client IP preservation. When enabled, the
+  # proxy will expect and parse the PROXY protocol header.
+  #   use_proxy_protocol: true
+  # Additional annotations to add to the proxy service account.
+  #   serviceaccount_annotations:
+  #     eks.amazonaws.com/role-arn: arn:aws:iam::329599618741:role/...
   env:
     # - name: OTEL_EXPORTER_OTLP_ENDPOINT
     #   value: http://main-collector.default.svc.cluster.local:4317
@@ -89,11 +87,11 @@ lscached:
 
 blob:
   # Uncomment the following block to configure blob storage on AWS
-  # s3:
-  #   access_key: AKIAEXAMPLE
-  #   secret_key: SECRETKEYEXAMPLE
-  #   code_storage_bucket: code-storage
-  #   cache_storage_bucket: cache-storage
+  #   s3:
+  #     access_key: AKIAEXAMPLE
+  #     secret_key: SECRETKEYEXAMPLE
+  #     code_storage_bucket: code-storage
+  #     cache_storage_bucket: cache-storage
 
   # Uncomment the following block to configure blob storage in-cluster with Minio
   minio:

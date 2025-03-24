@@ -12,7 +12,7 @@ terraform {
 locals {
   eks_cluster_name                         = "gargamel"
   eks_cluster_region                       = "us-west-2"
-  domain_name                              = "gargamel.deno-cluster.net"
+  cluster_domain_name                      = "gargamel.deno-cluster.net"
   enable_cluster_creator_admin_permissions = true
 }
 
@@ -21,7 +21,7 @@ module "aws_region" {
 
   eks_cluster_name                         = local.eks_cluster_name
   eks_cluster_region                       = local.eks_cluster_region
-  domain_name                              = local.domain_name
+  cluster_domain_name                      = local.cluster_domain_name
   enable_cluster_creator_admin_permissions = local.enable_cluster_creator_admin_permissions
 }
 
@@ -42,8 +42,8 @@ output "iam_lscache_serviceaccount_role_arn" {
 }
 
 
-output "hosted_zone_nameservers" {
-  value = module.aws_region.hosted_zone_nameservers
+output "cluster_domain_zone_nameservers" {
+  value = module.aws_region.cluster_domain_zone_nameservers
 }
 
 output "values_yaml" {

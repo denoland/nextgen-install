@@ -18,7 +18,7 @@ You'll need designate domain name like
 
 ```terraform
 locals {
-  domain_name          = "mycluster.deno-cluster.net" # <— The DNS zone that terraform will create in AWS.
+  cluster_domain_name  = "mycluster.deno-cluster.net" # <— The DNS zone that terraform will create in AWS.
   eks_cluster_name     = "deno-cluster-01"            # <— The name of the EKS cluster.
   eks_cluster_region   = "us-west-2"                  # <— The AWS region to deploy to.
 }
@@ -54,7 +54,7 @@ The name servers will look similar to this:
 
 ```
 # ...
-hosted_zone_nameservers = tolist([
+cluster_domain_zone_nameservers = tolist([
   "ns-1441.awsdns-52.org",
   "ns-1909.awsdns-46.co.uk",
   "ns-429.awsdns-53.com",

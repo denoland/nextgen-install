@@ -9,13 +9,28 @@ variable "create_eks_policies" {
   default = true
 }
 
-variable "domain_name" {
-  type = string
+
+variable "cluster_domain_name" {
+  type        = string
+  description = "The hostname for this region's API endpoint"
+}
+
+variable "cluster_domain_zone" {
+  description = "The DNS zone for the API domain (e.g., region.deno.net). If not provided, a zone will be created with the cluster_domain_name value."
+  default     = null
+  type        = any
 }
 
 variable "eks_cluster_region" {
   type = string
 }
+
+variable "enable_global_accelerator" {
+  type        = bool
+  default     = false
+  description = "Whether to enable Global Accelerator. If false, use the Kubernetes-created NLB."
+}
+
 
 variable "k8s_namespace" {
   type    = string
@@ -49,24 +64,31 @@ variable "eks_node_group" {
   }
 }
 
-variable "wait_for_acm_validation" {
-  type    = bool
-  default = false
-}
-
 variable "enable_loadbalancer_tls_termination" {
   type        = bool
   default     = true
   description = "Terminate TLS at the AWS Network Load Balancer"
 }
 
-variable "create_code_storage_bucket" {
+variable "wait_for_acm_validation" {
+  type    = bool
+  default = false
+}
+
+variable "use_proxy_protocol" {
   type        = bool
   default     = true
-  description = "Create an S3 bucket for code storage"
+  description = "Use proxy protocol for client IP preservation"
 }
 
 variable "code_storage_bucket" {
-  type    = string
-  default = ""
+  type        = string
+  default     = null
+  description = "Name of an existing S3 bucket to use for code storage. If null, a new bucket will be created."
+}
+
+variable "karpenter_enabled" {
+  description = "If set to `true` the module will setup karpenter"
+  type        = bool
+  default     = true
 }

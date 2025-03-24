@@ -52,7 +52,7 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: karpenter.sh/provisioner-name
+                  - key: deno.com/workloads
                     operator: DoesNotExist
               {{- if eq .Values.provider "aws" }}
               - matchExpressions:

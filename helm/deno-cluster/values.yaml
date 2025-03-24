@@ -12,14 +12,48 @@ clusterRBAC:
 controller:
   isolate_worker:
     tolerations:
-    - key: isolate-worker
+    - key: deno.com/workloads
       operator: Exists
       effect: NoSchedule
     node_affinities:
-    - key: karpenter.sh/provisioner-name
+    - key: deno.com/workloads
       operator: In
-      values: ['default']
+      values: ['isolate-workers']
 
+lscached:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: lscached-serve
+          topologyKey: "kubernetes.io/hostname"
+  tolerations: []
+
+proxy:
+  use_proxy_protocol: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  autoscaler:
+    minReplicas: 1
+    maxReplicas: 10
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: proxy
+          topologyKey: "kubernetes.io/hostname"
+  tolerations: []
 
 dnsmasq:
   upstreamServers: 
@@ -38,3 +72,20 @@ dnsmasq:
 
 compute_pops:
   - self
+
+karpenter:
+  ec2NodeClass:
+    isolateWorkers:
+      kubelet:
+        maxPods: 205
+  nodePool:
+    isolateWorkers:
+      expireAfter: 4h
+      single_az:
+        enabled: false
+        zoneName: ap-northeast-1a
+    stableWorkload:
+      expireAfter: 710h
+      single_az:
+        enabled: false
+        zoneName: ap-northeast-1a

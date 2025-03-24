@@ -28,14 +28,9 @@ spec:
     spec:
       serviceAccountName: lscached
       affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app: lscached-serve
-              topologyKey: "kubernetes.io/hostname"
+        {{- toYaml .Values.lscached.affinity | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.lscached.tolerations | nindent 8 }}
       containers:
       - args:
         - /lscached
@@ -318,3 +313,14 @@ spec:
   selector:
     app: lscached-serve
   type: ClusterIP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lscached
+  namespace: {{ .Release.Namespace }}
+spec:
+  maxUnavailable: 0%
+  selector:
+    matchLabels:
+      app: lscached-serve
