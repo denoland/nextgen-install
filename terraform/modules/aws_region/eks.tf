@@ -297,8 +297,23 @@ module "eks" {
   cluster_addons = {
     aws-ebs-csi-driver = {}
     coredns            = {}
-    kube-proxy         = {}
-    vpc-cni            = {}
+    eks-pod-identity-agent = {
+      most_recent       = true
+      resolve_conflicts = "OVERWRITE"
+    }
+    kube-proxy = {}
+    vpc-cni = {
+      most_recent       = true
+      before_compute    = true
+      resolve_conflicts = "OVERWRITE"
+      configuration_values = jsonencode({
+        env = {
+          # Reference docs https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+        }
+      })
+    }
   }
 
   vpc_id     = aws_vpc.shh_vpc.id

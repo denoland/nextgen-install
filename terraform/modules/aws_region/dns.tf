@@ -1,57 +1,48 @@
 // Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
 
-resource "aws_route53_zone" "domain_name" {
-  name = "${var.domain_name}."
-}
-
-
 locals {
-  cert_records = var.enable_loadbalancer_tls_termination ? aws_acm_certificate.cert.0.domain_validation_options : []
+  # Create a new zone if cluster_domain_zone is not provided
+  create_zone = var.cluster_domain_zone == null
+
+  # Use either the provided zone or the newly created zone
+  zone = local.create_zone ? aws_route53_zone.api_domain_zone[0] : var.cluster_domain_zone
 }
 
-resource "aws_route53_record" "record_set1" {
-  for_each = {
-    for dvo in local.cert_records : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
+# Create a new Route53 zone if one wasn't provided
+resource "aws_route53_zone" "api_domain_zone" {
+  count = local.create_zone ? 1 : 0
+  name  = var.cluster_domain_name
+
+  tags = {
+    Name        = var.cluster_domain_name
+    Environment = var.eks_cluster_name
+    ManagedBy   = "terraform"
   }
-  allow_overwrite = true
-  ttl             = 60
-  name            = each.value.name
-  records         = [each.value.record]
-  type            = each.value.type
-  zone_id         = aws_route53_zone.domain_name.zone_id
 }
 
-data "aws_lb" "nlb" {
-  depends_on = [kubernetes_service.nlb_proxy_service]
-  name       = "${var.eks_cluster_name}-nlb"
-}
-
-resource "aws_route53_record" "apex_a_record" {
-  name = "${var.domain_name}."
-  type = "A"
+# Create DNS record for the API endpoint
+resource "aws_route53_record" "api_endpoint" {
+  zone_id = local.zone.id
+  name    = var.cluster_domain_name
+  type    = "A"
 
   alias {
-    name                   = data.aws_lb.nlb.dns_name
-    zone_id                = data.aws_lb.nlb.zone_id
+    name                   = data.aws_lb.nlb_direct.dns_name
+    zone_id                = data.aws_lb.nlb_direct.zone_id
     evaluate_target_health = true
   }
-
-  zone_id = aws_route53_zone.domain_name.zone_id
 }
 
-resource "aws_route53_record" "wildcard_a_record" {
-  name = "*.${var.domain_name}."
-  type = "A"
+# Create wildcard DNS record
+resource "aws_route53_record" "api_endpoint_wildcard" {
+  zone_id = local.zone.id
+  name    = "*.${var.cluster_domain_name}"
+  type    = "A"
 
   alias {
-    name                   = data.aws_lb.nlb.dns_name
-    zone_id                = data.aws_lb.nlb.zone_id
-    evaluate_target_health = false
+    name                   = data.aws_lb.nlb_direct.dns_name
+    zone_id                = data.aws_lb.nlb_direct.zone_id
+    evaluate_target_health = true
   }
-
-  zone_id = aws_route53_zone.domain_name.zone_id
 }
+

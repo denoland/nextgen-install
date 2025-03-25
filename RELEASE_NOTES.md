@@ -1,5 +1,23 @@
 # Releases
 
+### 0.0.24 / 2025.03.24
+
+> [!IMPORTANT]
+> **Before upgrading** please run `kubectl delete configmap root-seed-commitment`.
+> This will force the `controller` component to regenerate the configmap, which
+> is necessary to upgrade to version 0.0.24
+
+- [experimental] Added support for multi-region replication of user code in the controller.
+- The proxy now supports the PROXY protocol, allowing client IP to be preserved end-to-end.
+- Isolate workers now export internal spans, this is particularly useful to debug the boot process.
+- The proxy now uses a Horizontal Pod Autoscaler for improved scalability.
+- New object API for interacting with the code bucket. See [Cluster Object API] for details.
+- Updated the scaling heuristic to consider both CPU and memory utilization.
+- Improved stability when isolate-workers shut down.
+- The Deno version was upgraded to v2.2.x
+- The deployment id no longer includes the `appconfig://` prefix.
+- The controller now has a `/dump-workers` endpoint that returns information about isolate workers for debugging.
+
 ### 0.0.23 / 2025.02.28
 
 - Introduced the [AppConfig] system, replacing the previous deployment mechanism
@@ -111,3 +129,4 @@
 [Cluster API Auth]: https://github.com/denoland/nextgen-install/wiki/Cluster-API-Auth
 [Dynamic TLS Certificates]: https://github.com/denoland/nextgen-install/wiki/Dynamic-TLS-Certificates
 [OpenTelemetry Configuration]: https://github.com/denoland/nextgen-install/wiki/OpenTelemetry-Configuration
+[Cluster Object API]: https://github.com/denoland/nextgen-install/wiki/Cluster-Object-API

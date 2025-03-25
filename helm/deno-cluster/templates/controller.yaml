@@ -222,7 +222,7 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
-              - key: karpenter.sh/provisioner-name
+              - key: deno.com/workloads
                 operator: DoesNotExist
             {{- if eq .Values.provider "aws" }}
             - matchExpressions:
@@ -299,6 +299,10 @@ spec:
           value: {{ .Values.region }}
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.name=deno-controller,service.namespace=deno_cluster"
+        {{- if (.Values.mptsync).enable }}
+        - name: MPTSYNC_CONFIG
+          value: {{ .Values.mptsync.config | toJson | quote }}
+        {{- end }}
         {{- if .Values.blob.minio }}
         - name: S3_ENDPOINT
           value: http://minio.{{ .Release.Namespace }}.svc.cluster.local:9000

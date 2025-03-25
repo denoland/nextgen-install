@@ -2,17 +2,13 @@
 
 provider: aws
 region: ${region}
-hostname: ${hostname}
+hostname: ${cluster_domain_name}
 cluster_name: ${cluster_name}
-
-aws:
-  subnet: ${subnet}
-  nlb: ${nlb}
 
 blob:
   s3:
-    code_storage_bucket: ${code_bucket}
-    cache_storage_bucket: ${cache_bucket}
+    code_storage_bucket: ${code_storage_bucket}
+    cache_storage_bucket: ${cache_storage_bucket}
 
 auth:
   allow_bypass: true
@@ -22,11 +18,12 @@ controller:
     eks.amazonaws.com/role-arn: ${basic_service_account}
   env:
     - name: NODE_METRICS_SELECTOR
-      value: karpenter.sh/provisioner-name=default
+      value: deno.com/workloads=isolate-workers
 
 proxy:
   serviceaccount_annotations:
     eks.amazonaws.com/role-arn: ${proxy_service_account}
+  use_proxy_protocol: ${use_proxy_protocol}
 
 lscached:
   serviceaccount_annotations:
