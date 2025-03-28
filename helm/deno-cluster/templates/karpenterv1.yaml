@@ -44,6 +44,12 @@ spec:
     # We've been hitting the registryPullQPS limit. Hence, removing it
     [settings.kubernetes]
     "registry-qps" = 0
+
+    [settings.kernel]
+    lockdown = "none"
+
+    [settings.boot.kernel-parameters]
+    "preempt" = ["full"]
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
@@ -80,11 +86,20 @@ spec:
     # We've been hitting the registryPullQPS limit. Hence, removing it
     [settings.kubernetes]
     "registry-qps" = 0
+
+    [settings.kernel]
+    lockdown = "none"
+
+    [settings.boot.kernel-parameters]
+    "preempt" = ["full"]
+---
+{{- /* Create NodePools for each isolate pool */ -}}
+{{- range $index, $poolConfig := .Values.isolate_pools }}
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: isolate-workers-fallback
+  name: isolate-workers-{{ $poolConfig.name }}-fallback
 spec:
   weight: 1
   disruption:
@@ -95,17 +110,24 @@ spec:
   template:
     metadata:
       labels:
-        deno.com/workloads: isolate-workers
+        {{- range $key, $value := $poolConfig.node_labels }}
+        {{ $key }}: {{ $value }}
+        {{- end }}
     spec:
-      expireAfter: {{ .Values.karpenter.nodePool.isolateWorkers.expireAfter }}
+      expireAfter: {{ $.Values.karpenter.nodePool.isolateWorkers.expireAfter }}
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
         name: isolate-workers
       taints:
       - key: deno.com/workloads
-        value: nextgen
+        value: isolate-workers
         effect: NoSchedule
+      {{- range $key, $value := $poolConfig.node_labels }}
+      - key: {{ $key }}
+        value: {{ $value }}
+        effect: NoSchedule
+      {{- end }}
       requirements:
       - key: kubernetes.io/arch
         operator: In
@@ -134,20 +156,17 @@ spec:
         operator: Gt
         values:
         - "2"
-      - key: "karpenter.k8s.aws/instance-cpu"
-        operator: Gt
-        values: ["1"]
-      {{- if .Values.karpenter.nodePool.isolateWorkers.single_az.enabled }}
+      {{- if $.Values.karpenter.nodePool.isolateWorkers.single_az.enabled }}
       - key: topology.kubernetes.io/zone
         operator: In
         values:
-        - {{ .Values.karpenter.nodePool.isolateWorkers.single_az.zoneName }}
+        - {{ $.Values.karpenter.nodePool.isolateWorkers.single_az.zoneName }}
       {{- end }}
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: isolate-workers-preferred
+  name: isolate-workers-{{ $poolConfig.name }}-preferred
 spec:
   weight: 50
   disruption:
@@ -158,17 +177,21 @@ spec:
   template:
     metadata:
       labels:
-        deno.com/workloads: isolate-workers
+        {{- range $key, $value := $poolConfig.node_labels }}
+        {{ $key }}: {{ $value }}
+        {{- end }}
     spec:
-      expireAfter: {{ .Values.karpenter.nodePool.isolateWorkers.expireAfter }}
+      expireAfter: {{ $.Values.karpenter.nodePool.isolateWorkers.expireAfter }}
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
         name: isolate-workers
       taints:
-      - key: deno.com/workloads
-        value: nextgen
+      {{- range $key, $value := $poolConfig.node_labels }}
+      - key: {{ $key }}
+        value: {{ $value }}
         effect: NoSchedule
+      {{- end }}
       requirements:
       - key: kubernetes.io/arch
         operator: In
@@ -197,15 +220,13 @@ spec:
         operator: Gt
         values:
         - "5"
-      - key: "karpenter.k8s.aws/instance-cpu"
-        operator: Gt
-        values: ["1"]
-      {{- if .Values.karpenter.nodePool.isolateWorkers.single_az.enabled }}
+      {{- if $.Values.karpenter.nodePool.isolateWorkers.single_az.enabled }}
       - key: topology.kubernetes.io/zone
         operator: In
         values:
-        - {{ .Values.karpenter.nodePool.isolateWorkers.single_az.zoneName }}
+        - {{ $.Values.karpenter.nodePool.isolateWorkers.single_az.zoneName }}
       {{- end }}
+{{- end }}
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -262,9 +283,6 @@ spec:
         operator: Gt
         values:
         - "5"
-      - key: "karpenter.k8s.aws/instance-cpu"
-        operator: Gt
-        values: ["1"]
       {{- if .Values.karpenter.nodePool.stableWorkload.single_az.enabled }}
       - key: topology.kubernetes.io/zone
         operator: In

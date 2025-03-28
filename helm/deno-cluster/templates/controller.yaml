@@ -151,19 +151,22 @@ subjects:
     namespace: {{ .Release.Namespace }}
 {{ end }}
 ---
+{{- range $index, $pool := .Values.isolate_pools }}
 apiVersion: v1
-data:
-  foo: bar
+data: {}
 kind: ConfigMap
 metadata:
-  name: pods-config
-  namespace: {{ .Release.Namespace }}
+  name: controller-auto-scaler-state-{{ $pool.name }}
+  namespace: {{ $.Release.Namespace }}
 ---
 apiVersion: v1
+data: {}
 kind: ConfigMap
 metadata:
-  name: controller-auto-scaler-state
-  namespace: {{ .Release.Namespace }}
+  name: isolate-assigned-pods-{{ $pool.name }}
+  namespace: {{ $.Release.Namespace }}
+---
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -236,24 +239,10 @@ spec:
         - secretRef:
             name: controller-credentials
         env:
-        - name: ISOLATE_WORKER_TOLERATIONS
-          value: {{ .Values.controller.isolate_worker.tolerations | toJson | quote}}
-        - name: ISOLATE_WORKER_NODE_AFFINITIES
-          value: {{ .Values.controller.isolate_worker.node_affinities | toJson | quote}}
-        - name: ISOLATE_WORKER_CPU_REQUEST
-          value: {{ quote (default "15m" .Values.controller.isolate_worker_cpu_request) }}
-        - name: ISOLATE_WORKER_MEMORY_REQUEST
-          value: {{ quote (default "32M" .Values.controller.isolate_worker_memory_request) }}
-        - name: ISOLATE_WORKER_MEMORY_LIMIT
-          value: {{ quote (default "4096M" .Values.controller.isolate_worker_memory_limit) }}
-        - name: ISOLATE_WORKER_MIN_CPU_PER_NODE
-          value: {{ quote (default "1500m" .Values.controller.isolate_worker_min_cpu_per_node) }}
-        - name: MIN_ISOLATE_WORKERS_REPLICAS
-          value: {{ quote (default 4 .Values.controller.min_isolate_workers_replicas) }}
-        - name: MAX_ISOLATE_WORKERS_REPLICAS
-          value: {{ quote (default 10 .Values.controller.max_isolate_workers_replicas) }}
         - name: ISOLATE_WORKER_CONTAINER_IMAGE
           value: {{ default "ghcr.io/denoland" .Values.docker_base_path }}/{{ default "cluster" .Values.docker_image_prefix }}-isolate-worker:{{ default .Chart.AppVersion (.Values.controller).isolate_worker_version }}
+        - name: ISOLATE_POOLS_CONFIGMAP
+          value: isolate-pools-config
         - name: CONTROLLER_POD_NAME
           valueFrom:
             fieldRef:

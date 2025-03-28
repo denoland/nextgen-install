@@ -9,16 +9,27 @@ storageClasses:
 clusterRBAC:
   enabled: true
 
-controller:
-  isolate_worker:
-    tolerations:
-    - key: deno.com/workloads
-      operator: Exists
-      effect: NoSchedule
-    node_affinities:
-    - key: deno.com/workloads
-      operator: In
-      values: ['isolate-workers']
+# Isolate pool configuration
+# Each pool is defined as an object in the array with its own properties including a name field
+isolate_pools:
+  - name: default
+    target_free_pool_ratio: 0.5        # Target ratio of free pods to total pods
+    min_workers_replicas: 4            # Minimum number of worker replicas
+    max_workers_replicas: 10           # Maximum number of worker replicas
+    worker_cpu_request: "15m"          # CPU request for worker pods
+    worker_memory_request: "32M"       # Memory request for worker pods
+    worker_memory_limit: "1024M"       # Memory limit for worker pods
+    worker_min_cpu_per_node: "1500m"   # Minimum CPU per node for worker pods
+    idle_timeout_ms: 60000             # Idle timeout in milliseconds
+    cluster_util_source: "mr"          # Source for cluster utilization metrics (mr, ms, or ss)
+    cluster_cpu_pct_target: 0.6        # Target CPU utilization percentage
+    cluster_memory_pct_target: 0.6     # Target memory utilization percentage
+    worker_pods_grace_period_sec: 120  # Grace period for worker pods termination
+    node_labels:                       # Node labels for this pool
+      deno.com/pool: default
+    # lscfuse_startup_snapshot_max_size: "67108864" # Optional LSCFUSE startup snapshot max size
+    # worker_tolerations: []           # Optional tolerations for worker pods
+    # worker_node_affinities: []       # Optional node affinities for worker pods
 
 lscached:
   affinity:
@@ -56,12 +67,12 @@ proxy:
   tolerations: []
 
 dnsmasq:
-  upstreamServers: 
+  upstreamServers:
   - 8.8.8.8
   - 8.8.4.4
   - 1.1.1.1
   - 1.0.0.1
-  resources: 
+  resources:
     requests:
         cpu: 100m
         memory: 100Mi

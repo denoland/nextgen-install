@@ -30,6 +30,15 @@ resource "aws_s3_bucket" "code_storage" {
   bucket = "${var.eks_cluster_name}-code-storage-${local.short_uuid}"
 }
 
+resource "aws_s3_directory_bucket" "code_storage_express" {
+  count  = var.s3_express_zone == null ? 0 : 1
+  bucket = "${var.eks_cluster_name}-code-storage-${local.short_uuid}--${var.s3_express_zone}--x-s3"
+
+  location {
+    name = var.s3_express_zone
+  }
+}
+
 resource "aws_s3_bucket_ownership_controls" "code_storage" {
   count  = local.create_code_storage_bucket ? 1 : 0
   bucket = aws_s3_bucket.code_storage[0].id

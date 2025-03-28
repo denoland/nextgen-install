@@ -9,6 +9,10 @@ blob:
   s3:
     code_storage_bucket: ${code_storage_bucket}
     cache_storage_bucket: ${cache_storage_bucket}
+%{ if s3_express_zone != null ~}
+    express_code_storage_bucket: ${express_code_storage_bucket}
+  use_express_code_storage: ${use_express_code_storage}
+%{ endif ~}
 
 auth:
   allow_bypass: true
@@ -16,9 +20,6 @@ auth:
 controller:
   serviceaccount_annotations:
     eks.amazonaws.com/role-arn: ${basic_service_account}
-  env:
-    - name: NODE_METRICS_SELECTOR
-      value: deno.com/workloads=isolate-workers
 
 proxy:
   serviceaccount_annotations:
