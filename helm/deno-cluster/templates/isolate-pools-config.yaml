@@ -1,0 +1,69 @@
+# Copyright Deno Land Inc. All Rights Reserved. Proprietary and confidential.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: isolate-pools-config
+  namespace: {{ .Release.Namespace }}
+data:
+  isolate_pools: |
+    {{- range $index, $pool := .Values.isolate_pools }}
+    - name: {{ $pool.name }}
+      targetFreePoolRatio: {{ $pool.target_free_pool_ratio | default 0.5 }}
+      minWorkersReplicas: {{ $pool.min_workers_replicas | default 4 }}
+      maxWorkersReplicas: {{ $pool.max_workers_replicas | default 10 }}
+      workerCpuRequest: {{ $pool.worker_cpu_request | default "1000m" | quote }}
+      workerMemoryRequest: {{ $pool.worker_memory_request | default "32M" | quote }}
+      workerMemoryLimit: {{ $pool.worker_memory_limit | default "1Gi" | quote }}
+      workerMinCpuPerNode: {{ $pool.worker_min_cpu_per_node | default "1500m" | quote }}
+      idleTimeoutMs: {{ $pool.idle_timeout_ms | default 60000 }}
+      clusterUtilSource: {{ $pool.cluster_util_source | default "mr" | quote }}
+      clusterCpuPctTarget: {{ $pool.cluster_cpu_pct_target | default 0.6 }}
+      clusterMemoryPctTarget: {{ $pool.cluster_memory_pct_target | default 0.6 }}
+      deploymentScaleUpAvgCpuUtilThreshold: {{ $pool.deployment_scale_up_avg_cpu_util_threshold | default 0.3 }}
+      deploymentScaleUpAvgMemoryUtilThresholdPct: {{ $pool.deployment_scale_up_avg_memory_util_threshold_pct | default 30.0 }}
+      workerPodsGracePeriodSec: {{ $pool.worker_pods_grace_period_sec | default 120 }}
+
+      workerTolerations:
+        - key: deno.com/workloads
+          operator: Equal
+          value: isolate-workers
+          effect: NoSchedule
+        {{- if $pool.worker_tolerations }}
+        {{- range $toleration := $pool.worker_tolerations }}
+        - key: {{ $toleration.key }}
+          operator: {{ $toleration.operator }}
+          value: {{ $toleration.value }}
+          effect: {{ $toleration.effect }}
+        {{- end }}
+        {{- end }}
+
+      workerNodeAffinities:
+        {{- if $pool.worker_node_affinities }}
+        {{- range $affinity := $pool.worker_node_affinities }}
+        - key: {{ $affinity.key }}
+          operator: {{ $affinity.operator }}
+          {{- if $affinity.values }}
+          values:
+            {{- range $value := $affinity.values }}
+            - {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- else }}
+        []
+        {{- end }}
+
+      {{- if $pool.lscfuse_startup_snapshot_max_size }}
+      lscfuseStartupSnapshotMaxSize: {{ $pool.lscfuse_startup_snapshot_max_size | quote }}
+      {{- end }}
+
+      {{- if $pool.node_labels }}
+      nodeLabels:
+        {{- range $key, $value := $pool.node_labels }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+      {{- else }}
+      nodeLabels: {}
+      {{- end }}
+    {{- end }}

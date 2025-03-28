@@ -133,8 +133,13 @@ spec:
             - name: APPCONFIG_BUCKET
               value: {{ .Values.blob.minio.code_storage_bucket }}
             {{- else if .Values.blob.s3 }}
+            {{- if .Values.blob.use_express_code_storage }}
+            - name: APPCONFIG_BUCKET
+              value: {{ .Values.blob.s3.express_code_storage_bucket }}
+            {{- else }}
             - name: APPCONFIG_BUCKET
               value: {{ .Values.blob.s3.code_storage_bucket }}
+            {{- end }}
             {{- end }}
             {{- range .Values.proxy.env }}
             - name: {{ .name }}

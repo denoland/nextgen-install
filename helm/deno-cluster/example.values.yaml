@@ -23,21 +23,11 @@ controller:
   image: ghcr.io/denoland/cluster-controller:v0.0.17
   # serviceaccount_annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::329599618741:role/...
-  # min_isolate_workers_replicas: 10
-  # max_isolate_workers_replicas: 100
-  # isolate_worker_cpu_request: 15m
-  # isolate_worker_min_cpu_per_node: 1500m
   env:
     - name: ISOLATE_WORKER_CONTAINER_IMAGE
       value: ghcr.io/denoland/cluster-isolate-worker:v0.0.17
-    # - name: ISOLATE_TARGET_FREE_POOL_RATIO
-    #   value: "0.5"
-    # - name: NODE_METRICS_SELECTOR
-    #   value: "deno.com/workloads=isolate-workers"
-    # - name: CLUSTER_CPU_PCT_TARGET
-    #   value: "0.6"
-    # - name: CLUSTER_MEMORY_PCT_TARGET
-    #   value: "0.6"
+    - name: ISOLATE_WORKER_MIN_CPU_PER_NODE
+      value: "1500m"
     # - name: OTEL_EXPORTER_OTLP_ENDPOINT
     #   value: http://main-collector.default.svc.cluster.local:4317
 

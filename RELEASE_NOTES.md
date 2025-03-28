@@ -1,5 +1,23 @@
 # Releases
 
+### 0.0.25 / 2025.03.28
+
+- Added support for multiple isolate worker pools
+  - Pools are automatically provisioned using Karpenter, and isolated using
+    Kubernetes node labels, taints, and tolerations.
+  - Each pool has its own configuration including dedicated resources, scaling
+    parameters, and node allocation. See [controller
+    configuration](https://github.com/denoland/nextgen-install/wiki/Controller-Configuration)
+    for details.
+  - A deployment can specify a pool using the `pool` parameter in its
+    [AppConfig].
+  - The proxy now includes the pool name in the `Via` header.
+- Unstable [Deno.Kv] APIs are now disabled.
+- The `RUST_LOG` environment variable is now respected in all components.
+- The trace ID is now returned in the HTTP response through the `x-deno-trace-id` header.
+- Traces are now propagated all the way to user code.
+- Fixed auto-detection of code bucket location in us-east-1.
+
 ### 0.0.24 / 2025.03.24
 
 > [!IMPORTANT]
@@ -130,3 +148,4 @@
 [Dynamic TLS Certificates]: https://github.com/denoland/nextgen-install/wiki/Dynamic-TLS-Certificates
 [OpenTelemetry Configuration]: https://github.com/denoland/nextgen-install/wiki/OpenTelemetry-Configuration
 [Cluster Object API]: https://github.com/denoland/nextgen-install/wiki/Cluster-Object-API
+[Deno.Kv]: https://docs.deno.com/api/deno/~/Deno.Kv

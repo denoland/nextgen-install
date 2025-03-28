@@ -128,10 +128,11 @@ Note: substitute `<cluster_domain>` for the value you specified, e.g. `mycluster
 Note: substitute `<code-storage-bucket>`for the value from the terraform output, e.g.`deno-cluster-01-code-storage-f65ef9c1`.
 
 ```bash
+CLUSTER_ENDPOINT=https://<cluster_domain>
+CLUSTER_HOSTNAME=<cluster_domain>
 ../tools/ddng deploy \
   -s ../examples/hello \
   -d hello.<cluster_domain> \
-  --s3-bucket <code-storage-bucket>
 ```
 
 [aws]: https://aws.amazon.com/cli/

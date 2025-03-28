@@ -6,6 +6,7 @@ import { join } from "jsr:@std/path@1.0.3/join";
 import { ensureDir } from "jsr:@std/fs@1.0.3";
 import { crypto } from "jsr:@std/crypto@1.0.3";
 import { encodeBase64Url } from "jsr:@std/encoding@1.0.7";
+import { retry, RetryError } from "jsr:@std/async/retry";
 
 interface DeployArgs {
   clusterEndpoint: URL;
@@ -18,18 +19,22 @@ interface DeployArgs {
   authKey?: string;
   authClaims?: string;
   skipOptimization?: boolean;
+  ext2?: boolean;
+  squashfs?: boolean;
+  disableGvisor?: boolean;
   otelServiceName?: string;
   otelServiceVersion?: string;
   otelResourceAttributes?: Record<string, string>;
 }
 
-interface UserConfig {
+export interface UserConfig {
   code?: string;
   entrypoint?: string;
   env?: Record<string, string>;
   args?: string[];
   otel?: OtelConfig;
   cache?: Record<string, CacheConfig>;
+  pool?: string;
 }
 
 interface OtelConfig {
@@ -79,23 +84,43 @@ function createWriter(
       }
     }
 
+    const fmt = (n: number) => n.toFixed(2);
+    const sz = body.length >= 1024 * 1024
+      ? `${fmt(body.length / 1024 / 1024)}MB`
+      : body.length >= 1024
+        ? `${fmt(body.length / 1024)}KB`
+        : `${body.length} bytes`;
+
     const url = new URL(args.clusterEndpoint);
     url.pathname = path;
-    console.info(`Writing to ${path}...`);
+    const doit = async () => {
+      console.info(`Putting '${path}' in the bucket (${sz})...`);
 
-    const response = await fetch(
-      url,
-      { method: "PUT", headers, body, client },
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error(
-        `Failed to upload content (status=${response.status}): ${text}`,
+      const response = await fetch(
+        url,
+        { method: "PUT", headers, body, client },
       );
-    }
 
-    return response.ok;
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(
+          `Failed to upload content (status=${response.status}): ${text} `,
+        );
+        throw new Error();
+      }
+
+      return response;
+    };
+
+    try {
+      const res = await retry(doit, { maxAttempts: 3, maxTimeout: 10_000 });
+      return res.ok;
+    } catch (e) {
+      console.error(
+        `Operation failed after 3 retries. Error: ${Deno.inspect(e)}`,
+      );
+      return false;
+    }
   };
 }
 
@@ -141,7 +166,7 @@ async function createJwtToken(
     iss: "local",
     aud: args.clusterHostname,
     sub: "admin",
-    exp: Math.trunc(Date.now() / 1000 + 300),
+    exp: Math.trunc(Date.now() / 1000) + 600,
     scope: "appconfig bucket:w",
     ...claimsOverride,
   }));
@@ -248,48 +273,167 @@ async function deploy(args: DeployArgs) {
       Deno.exit(1);
     }
 
-    // Create tar archive
-    const tarCommand = new Deno.Command("tar", {
-      args: [
-        "cf",
-        join(tempDir, "pkg.tar"),
-        "--strip-components=1",
-        "-C",
-        join(tempDir, "pkg"),
-        ".",
-      ],
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    const { success: tarSuccess } = await tarCommand
-      .output();
-    if (!tarSuccess) {
-      console.error("Failed to create tar archive.");
+    let localCodePath: string;
+    let remoteCodePath: string;
+
+    let numFsOptions = 0;
+    if (args.ext2) numFsOptions++;
+    if (args.squashfs) numFsOptions++;
+    if (numFsOptions > 1) {
+      console.error("Only one of --ext2 or --squashfs can be specified.");
       Deno.exit(1);
+    }
+
+    // Create ext2/squashfs image or tar archive
+    if (args.ext2) {
+      localCodePath = join(tempDir, "pkg.ext2.img");
+      remoteCodePath = `images/pkg-${Date.now()}-${crypto.randomUUID()}.ext2.img`;
+
+      const duCommand = new Deno.Command("du", {
+        args: [
+          "-sm",
+          join(tempDir, "pkg"),
+        ],
+        stdout: "piped",
+        stderr: "inherit",
+      });
+      const duOutput = await duCommand.output();
+      if (!duOutput.success) {
+        console.error("Failed to calculate package size.");
+        Deno.exit(1);
+      }
+      const pkgSizeMB = parseInt(new TextDecoder().decode(duOutput.stdout).split("\t")[0]);
+
+      // count the number of files
+      const findCommand = new Deno.Command("find", {
+        args: [
+          join(tempDir, "pkg"),
+          "-type",
+          "f",
+        ],
+        stdout: "piped",
+        stderr: "inherit",
+      });
+      const findOutput = await findCommand.output();
+      if (!findOutput.success) {
+        console.error("Failed to count files in package.");
+        Deno.exit(1);
+      }
+      const fileCount = new TextDecoder().decode(findOutput.stdout).split("\n").length - 1;
+
+      const blockSize = 4096;
+      const fsSizeMB = Math.floor(pkgSizeMB + fileCount * blockSize / 1048576 + 2);
+
+      const mkfsCommand = new Deno.Command("mke2fs", {
+        args: [
+          "-L",
+          "",
+          "-b",
+          `${blockSize}`,
+          "-d",
+          join(tempDir, "pkg"),
+          "-t",
+          "ext2",
+          localCodePath,
+          `${fsSizeMB}M`,
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const { success: mkfsSuccess } = await mkfsCommand
+        .output();
+      if (!mkfsSuccess) {
+        console.error("Failed to create ext2 disk image.");
+        Deno.exit(1);
+      }
+
+      console.log("Fixing up permissions...")
+      let totalFiles = 0;
+      let totalDirs = 0;
+      let stack = ["/"];
+      while (stack.length) {
+        // the `ext2fs` package has a memory leak in its Emscripten-compiled WASM so we have to reset it every 1000 files
+        const worker = new Worker(new URL("fix_permissions.ts", import.meta.url).href, { type: "module", deno: {} });
+        worker.postMessage({ localCodePath, stack })
+        const timeoutId = setTimeout(() => {
+          console.error("Worker time out, current stack:", stack);
+          Deno.exit(1);
+        }, 10000);
+        const { data }: { data: { stack: string[], totalFiles: number, totalDirs: number } } = await new Promise((resolve, reject) => { worker.onmessage = resolve; worker.onerror = reject; });
+        clearTimeout(timeoutId);
+        stack = data.stack;
+        totalFiles += data.totalFiles;
+        totalDirs += data.totalDirs;
+      }
+      console.log(`Fixed permissions on ${totalFiles} files and ${totalDirs} directories.`);
+    } else if (args.squashfs) {
+      localCodePath = join(tempDir, "pkg.squashfs.img");
+      remoteCodePath = `images/pkg-${Date.now()}-${crypto.randomUUID()}.squashfs.img`;
+
+      const mkfsCommand = new Deno.Command("mksquashfs", {
+        args: [
+          join(tempDir, "pkg"),
+          localCodePath,
+          "-force-uid",
+          "1",
+          "-force-gid",
+          "1",
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const { success: mkfsSuccess } = await mkfsCommand
+        .output();
+      if (!mkfsSuccess) {
+        console.error("Failed to create squashfs disk image.");
+        Deno.exit(1);
+      }
+    } else {
+      localCodePath = join(tempDir, "pkg.tar");
+      remoteCodePath = `code/pkg-${Date.now()}-${crypto.randomUUID()}.tar`;
+      const tarCommand = new Deno.Command("tar", {
+        args: [
+          "cf",
+          localCodePath,
+          "--strip-components=1",
+          "-C",
+          join(tempDir, "pkg"),
+          ".",
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const { success: tarSuccess } = await tarCommand
+        .output();
+      if (!tarSuccess) {
+        console.error("Failed to create tar archive.");
+        Deno.exit(1);
+      }
     }
 
     // Upload package
     console.log("Uploading package...");
-    const codePath = `code/pkg-${Date.now()}-${crypto.randomUUID()}.tar`;
     if (
-      !await writeToBucket(codePath, {
-        path: join(tempDir, "pkg.tar"),
+      !await writeToBucket(remoteCodePath, {
+        path: localCodePath,
       })
     ) {
       console.error("Failed to upload package.");
       Deno.exit(1);
     }
 
+    console.log(`Uploaded code to /${remoteCodePath}`);
+
     // Construct the config object.
     const cacheAttrs = { org: "placeholder", random: crypto.randomUUID() };
     const appconfigJson = JSON.stringify(
-      <UserConfig> {
-        code: "/" + codePath,
+      <UserConfig>{
+        code: "/" + remoteCodePath,
         entrypoint: entryPoint,
         args: isNextApp ? ["start"] : undefined,
         env: Object.keys(args.env || {}).length > 0 ? args.env : undefined,
         otel: (args.otelServiceName || args.otelServiceVersion ||
-            args.otelResourceAttributes)
+          args.otelResourceAttributes)
           ? {
             serviceName: args.otelServiceName,
             serviceVersion: args.otelServiceVersion,
@@ -309,6 +453,7 @@ async function deploy(args: DeployArgs) {
             tags: {},
           },
         },
+        experimental: args.disableGvisor ? { disableGvisor: true } : undefined,
       },
     );
 
@@ -406,6 +551,15 @@ function usage() {
   console.log(
     "  --skip-optimize                  Skip the optimization step",
   );
+  console.log(
+    "  --ext2                           Build ext2 disk image instead of tarball",
+  );
+  console.log(
+    "  --squashfs                       Build squashfs disk image instead of tarball",
+  );
+  console.log(
+    "  --disable-gvisor                 Disable gVisor for this deployment",
+  );
   Deno.exit(1);
 }
 
@@ -435,12 +589,12 @@ if (import.meta.main) {
       e: "entry-point",
       k: "key",
     },
-    boolean: ["skip-optimize"],
+    boolean: ["skip-optimize", "ext2", "squashfs", "disable-gvisor"],
   });
 
   if (args._[0] === "deploy") {
     const clusterEndpoint = new URL(
-      Deno.env.get("CLUSTER_ENDPOINT") ?? "http://localhost",
+      Deno.env.get("CLUSTER_ENDPOINT") ?? "http://localhost:4080",
     );
     const clusterHostname = Deno.env.get("CLUSTER_HOSTNAME") ??
       (clusterEndpoint.hostname.match(/[a-z]/i)
@@ -448,7 +602,7 @@ if (import.meta.main) {
         : "localhost");
     const apiEndpoint = new URL(
       args["api-endpoint"] ||
-        `${clusterEndpoint.protocol}//objects.api.${clusterHostname}`,
+      `${clusterEndpoint.protocol}//objects.api.${clusterHostname}`,
     );
     clusterEndpoint.pathname = "";
 
@@ -469,6 +623,9 @@ if (import.meta.main) {
       authKey: args["key"],
       authClaims: args["auth-claims"],
       skipOptimization: args["skip-optimize"],
+      ext2: args["ext2"],
+      squashfs: args["squashfs"],
+      disableGvisor: args["disable-gvisor"],
       otelServiceName: args["otel-service-name"],
       otelServiceVersion: args["otel-service-version"],
       otelResourceAttributes: args["otel-resource-attribute"].length > 0

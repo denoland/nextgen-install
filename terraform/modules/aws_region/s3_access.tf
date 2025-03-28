@@ -10,13 +10,18 @@ resource "aws_iam_policy" "eks_s3_service_account_policy" {
     Statement = [
       {
         Effect = "Allow",
-        Action = "s3:*",
+        Action = ["s3:*"],
         Resource = [
           "arn:aws:s3:::${local.code_storage_bucket}",
           "arn:aws:s3:::${local.code_storage_bucket}/*",
           aws_s3_bucket.lsc_storage.arn,
           "${aws_s3_bucket.lsc_storage.arn}/*",
-        ]
+        ],
+      },
+      {
+        Effect   = "Allow",
+        Action   = ["s3express:*"],
+        Resource = ["*"],
       }
     ]
   })

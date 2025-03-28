@@ -4,6 +4,17 @@ variable "eks_cluster_name" {
   type = string
 }
 
+variable "s3_express_zone" {
+  type    = string
+  default = null
+}
+
+variable "use_express_code_storage" {
+  type        = bool
+  default     = false
+  description = "Whether to use S3 Express buckets for code storage"
+}
+
 variable "create_eks_policies" {
   type    = bool
   default = true
@@ -91,4 +102,19 @@ variable "karpenter_enabled" {
   description = "If set to `true` the module will setup karpenter"
   type        = bool
   default     = true
+}
+variable "override_az1" {
+  type    = string
+  default = null
+}
+
+variable "override_az2" {
+  type    = string
+  default = null
+}
+
+variable "create_oidc_provider" {
+  type        = bool
+  default     = true
+  description = "Whether to create the GitHub Actions OIDC provider. Set to false for secondary regions to avoid conflicts."
 }
