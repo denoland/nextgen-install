@@ -159,13 +159,6 @@ metadata:
   name: controller-auto-scaler-state-{{ $pool.name }}
   namespace: {{ $.Release.Namespace }}
 ---
-apiVersion: v1
-data: {}
-kind: ConfigMap
-metadata:
-  name: isolate-assigned-pods-{{ $pool.name }}
-  namespace: {{ $.Release.Namespace }}
----
 {{- end }}
 ---
 apiVersion: v1

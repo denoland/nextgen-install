@@ -13,8 +13,8 @@ data:
       minWorkersReplicas: {{ $pool.min_workers_replicas | default 4 }}
       maxWorkersReplicas: {{ $pool.max_workers_replicas | default 10 }}
       workerCpuRequest: {{ $pool.worker_cpu_request | default "1000m" | quote }}
-      workerMemoryRequest: {{ $pool.worker_memory_request | default "32M" | quote }}
-      workerMemoryLimit: {{ $pool.worker_memory_limit | default "1Gi" | quote }}
+      workerMemoryRequest: {{ $pool.worker_memory_request | quote }}
+      workerMemoryLimit: {{ $pool.worker_memory_limit | quote }}
       workerMinCpuPerNode: {{ $pool.worker_min_cpu_per_node | default "1500m" | quote }}
       idleTimeoutMs: {{ $pool.idle_timeout_ms | default 60000 }}
       clusterUtilSource: {{ $pool.cluster_util_source | default "mr" | quote }}
