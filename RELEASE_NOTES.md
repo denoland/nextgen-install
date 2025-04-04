@@ -1,5 +1,16 @@
 # Releases
 
+### 0.0.26 / 2025.04.04
+
+- Refactored the way the controller keeps track of assigned isolates, reducing cold start latency.
+- HTTP Caching now only considers resources that contain [`Cache-Control`][cache-control] or [`Expires`][expires] response headers.
+- Fixed a bug in the isolate worker pools configuration options.
+  - If requests are specified without limits, and the requests are higher than the
+    limits, the limits are automatically bumped to the requests.
+  - If limits are specified without requests, and the limits are lower than the
+    requests, the requests are automatically lowered to the limits.
+- Included a basic L7 firewall to our proxy.
+
 ### 0.0.25 / 2025.03.28
 
 - Added support for multiple isolate worker pools
@@ -149,3 +160,5 @@
 [OpenTelemetry Configuration]: https://github.com/denoland/nextgen-install/wiki/OpenTelemetry-Configuration
 [Cluster Object API]: https://github.com/denoland/nextgen-install/wiki/Cluster-Object-API
 [Deno.Kv]: https://docs.deno.com/api/deno/~/Deno.Kv
+[cache-control]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control
+[expires]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Expires
