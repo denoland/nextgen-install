@@ -56,6 +56,7 @@ variable "enable_cluster_creator_admin_permissions" {
 variable "eks_node_group" {
   description = "Configuration for the static EKS managed node group"
   type = object({
+    name           = string
     ami_type       = string
     instance_types = list(string)
     spot           = bool
@@ -65,8 +66,9 @@ variable "eks_node_group" {
     disk_size      = number
   })
   default = {
-    ami_type       = "AL2023_x86_64_STANDARD"
-    instance_types = ["t3a.medium"]
+    name           = "static"
+    ami_type       = "AL2023_ARM_64_STANDARD"
+    instance_types = ["t4g.medium"]
     spot           = true
     min_size       = 1
     max_size       = 1

@@ -1,5 +1,16 @@
 # Releases
 
+### 0.0.27 / 2025.04.11
+
+- Previously, the number of streams (logical connections between isolate-worker and proxy) was pinned to 80. Now this
+  number, which we call request concurrency, is configurable. Two new parameters are added to under `isolate_pool`:
+  - `initial_request_stream_concurrency` : Sets the starting number of request streams when an isolate-worker boots up.
+    Default: `10`
+  - `max_request_stream_concurrency` : Sets the maximum limit for request streams. The actual concurrency adjusts
+    dynamically between 0 and `max_request_stream_concurrency` based on CPU and memory usage. Default: `100`
+- The default values for the `static`, `isolate-workers-default-preferred` and `isolate-workers-default-fallback` now
+  uses Graviton instances on AWS.
+
 ### 0.0.26 / 2025.04.04
 
 - Refactored the way the controller keeps track of assigned isolates, reducing cold start latency.

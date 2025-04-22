@@ -87,3 +87,22 @@ blob:
   minio:
     code_storage_bucket: deployments
     cache_storage_bucket: cache
+
+isolate_pools:
+  - name: default
+    target_free_pool_ratio: 0.5
+    min_workers_replicas: 4
+    max_workers_replicas: 10
+    worker_cpu_request: "15m"
+    worker_memory_request: "32M"
+    worker_memory_limit: "1024M"
+    worker_min_cpu_per_node: "1500m"
+    idle_timeout_ms: 60000
+    cluster_util_source: "mr"
+    cluster_cpu_pct_target: 0.6
+    cluster_memory_pct_target: 0.6
+    worker_pods_grace_period_sec: 120
+    initial_request_stream_concurrency: 10
+    max_request_stream_concurrency: 100
+    node_labels:
+      deno.com/pool: default

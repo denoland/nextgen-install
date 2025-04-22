@@ -23,6 +23,8 @@ data:
       deploymentScaleUpAvgCpuUtilThreshold: {{ $pool.deployment_scale_up_avg_cpu_util_threshold | default 0.3 }}
       deploymentScaleUpAvgMemoryUtilThresholdPct: {{ $pool.deployment_scale_up_avg_memory_util_threshold_pct | default 30.0 }}
       workerPodsGracePeriodSec: {{ $pool.worker_pods_grace_period_sec | default 120 }}
+      initialRequestStreamConcurrency: {{ $pool.initial_request_stream_concurrency }}
+      maxRequestStreamConcurrency: {{ $pool.max_request_stream_concurrency }}
 
       workerTolerations:
         - key: deno.com/workloads

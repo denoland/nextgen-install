@@ -13,19 +13,21 @@ clusterRBAC:
 # Each pool is defined as an object in the array with its own properties including a name field
 isolate_pools:
   - name: default
-    target_free_pool_ratio: 0.5        # Target ratio of free pods to total pods
-    min_workers_replicas: 4            # Minimum number of worker replicas
-    max_workers_replicas: 10           # Maximum number of worker replicas
-    worker_cpu_request: "15m"          # CPU request for worker pods
-    worker_memory_request: null        # Memory request for worker pods. If not specified, min(memory_limit, 32M) will be used.
-    worker_memory_limit: null          # Memory limit for worker pods. If not specified, max(memory_request, 1024M) will be used.
-    worker_min_cpu_per_node: "1500m"   # Minimum CPU per node for worker pods
-    idle_timeout_ms: 60000             # Idle timeout in milliseconds
-    cluster_util_source: "mr"          # Source for cluster utilization metrics (mr, ms, or ss)
-    cluster_cpu_pct_target: 0.6        # Target CPU utilization percentage
-    cluster_memory_pct_target: 0.6     # Target memory utilization percentage
-    worker_pods_grace_period_sec: 120  # Grace period for worker pods termination
-    node_labels:                       # Node labels for this pool
+    target_free_pool_ratio: 0.5             # Target ratio of free pods to total pods
+    min_workers_replicas: 4                 # Minimum number of worker replicas
+    max_workers_replicas: 10                # Maximum number of worker replicas
+    worker_cpu_request: "15m"               # CPU request for worker pods
+    worker_memory_request: null             # Memory request for worker pods. If not specified, min(memory_limit, 32M) will be used.
+    worker_memory_limit: null               # Memory limit for worker pods. If not specified, max(memory_request, 1024M) will be used.
+    worker_min_cpu_per_node: "1500m"        # Minimum CPU per node for worker pods
+    idle_timeout_ms: 60000                  # Idle timeout in milliseconds
+    cluster_util_source: "mr"               # Source for cluster utilization metrics (mr, ms, or ss)
+    cluster_cpu_pct_target: 0.6             # Target CPU utilization percentage
+    cluster_memory_pct_target: 0.6          # Target memory utilization percentage
+    worker_pods_grace_period_sec: 120       # Grace period for worker pods termination
+    initial_request_stream_concurrency: 10  # Initial number of concurrent request streams per isolate
+    max_request_stream_concurrency: 100     # Maximum number of concurrent request streams per isolate
+    node_labels:                            # Node labels for this pool
       deno.com/pool: default
     # lscfuse_startup_snapshot_max_size: "67108864" # Optional LSCFUSE startup snapshot max size
     # worker_tolerations: []           # Optional tolerations for worker pods
