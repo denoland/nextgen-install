@@ -9,23 +9,25 @@ locals {
 
 # DNS records for the apps domain
 resource "aws_route53_record" "apex_a_record" {
-  count = var.apps_domain != null && var.global_accelerator_ip != null ? 1 : 0
+  count = var.apps_domain != null ? 1 : 0
 
   name    = var.apps_domain.name
   type    = "A"
   ttl     = 300
-  records = [var.global_accelerator_ip]
+  records = var.global_accelerator_ip != null ? [var.global_accelerator_ip] : flatten(aws_globalaccelerator_accelerator.ga.ip_sets[*].ip_addresses)
   zone_id = var.apps_domain.id
 }
 
+
+
 # Wildcard DNS records for the apps domain
 resource "aws_route53_record" "wildcard_a_record" {
-  count = var.apps_domain != null && var.global_accelerator_ip != null ? 1 : 0
+  count = var.apps_domain != null ? 1 : 0
 
   name    = "*.${var.apps_domain.name}"
   type    = "A"
   ttl     = 300
-  records = [var.global_accelerator_ip]
+  records = var.global_accelerator_ip != null ? [var.global_accelerator_ip] : flatten(aws_globalaccelerator_accelerator.ga.ip_sets[*].ip_addresses)
   zone_id = var.apps_domain.id
 }
 

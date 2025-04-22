@@ -201,32 +201,34 @@ spec:
       affinity:
 {{ if not (eq .Values.provider "minikube") }}
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app
-                operator: In
-                values:
-                - controller
-              - key: version
-                operator: In
-                values:
-                - "{{ default .Chart.AppVersion (.Values.controller).version }}"
-            topologyKey: "kubernetes.io/hostname"
-{{ end }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - controller
+                - key: version
+                  operator: In
+                  values:
+                  - "{{ default .Chart.AppVersion (.Values.controller).version }}"
+              topologyKey: "kubernetes.io/hostname"
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
               - key: deno.com/workloads
-                operator: DoesNotExist
-            {{- if eq .Values.provider "aws" }}
-            - matchExpressions:
-              - key: eks.amazonaws.com/nodegroup
                 operator: In
                 values:
-                - static
-            {{- end }}
+                - stable
+{{ end }}
+      tolerations:
+        - key: deno.com/workloads
+          operator: Equal
+          value: nextgen
+          effect: NoSchedule
       containers:
       - envFrom:
         - secretRef:
@@ -281,6 +283,14 @@ spec:
           value: {{ .Values.region }}
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.name=deno-controller,service.namespace=deno_cluster"
+        {{- if eq .Values.provider "minikube" }}
+        - name: NO_DNSMASQ
+          value: "1"
+        {{- end }}
+        {{- if .Values.enable_firecracker }}
+        - name: USE_FIRECRACKER
+          value: "1"
+        {{- end }}
         {{- if (.Values.mptsync).enable }}
         - name: MPTSYNC_CONFIG
           value: {{ .Values.mptsync.config | toJson | quote }}
